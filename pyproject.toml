@@ -1,0 +1,159 @@
+[project]
+name = "fyron"
+version = "0.3.20b4"
+description = "Fyron is an source-available Python toolkit for interoperable healthcare data and AI workflows. It provides unified access to FHIR data via REST APIs and relational (SQL-backed) FHIR servers, integrates DICOM imaging sources, and enables semantic exploration of clinical narratives using modern language models."
+readme = "README.md"
+requires-python = ">=3.11"
+license = "CC-BY-NC-4.0"
+license-files = ["LICENSE", "NOTICE"]
+authors = [
+    { name = "Bits & Flames", email = "hello@bitsandflames.ai" },
+]
+keywords = ["FHIR", "DICOM", "healthcare", "clinical", "NLP", "LLM"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+dependencies = [
+    "requests>=2.32.0,<3.0.0",
+    "certifi>=2026.10.19",
+    "urllib3>=2.8.0,<3.0.0",
+    "pandas>=2.2.0,<3.0.0",
+    "tqdm>=4.66.0,<5.0.0",
+    "psycopg>=3.1.19,<4.0.0",
+    "python-dotenv>=1.0.1,<2.0.0",
+    "pydicom>=3.0.2,<4.0.0",
+    "pillow>=13.0.0",
+    "SimpleITK>=2.3.1,<3.0.0",
+    "dicomweb-client>=0.59.1,<0.60.0",
+    "retrying>=1.3.3,<2.0.0",
+    "pyjwt>=2.15.1,<3.0.0",
+    "fhirpathpy>=2.1.0,<3.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/bitsandflames/fyron"
+Repository = "https://github.com/bitsandflames/fyron"
+Documentation = "https://fyron.bitsandflames.ai/"
+
+[project.optional-dependencies]
+excel = ["openpyxl>=3.1.0,<4.0.0"]
+survival = ["lifelines>=0.30.0,<1.0.0", "matplotlib>=3.8.0,<4.0.0", "scipy>=1.11.0,<2.0.0"]
+ml = [
+    "numpy>=1.26.0,<2.0.0",
+    "scikit-learn>=1.4.0,<2.0.0",
+    "xgboost>=2.0.0,<3.0.0",
+    "matplotlib>=3.8.0,<4.0.0",
+    "joblib>=1.3.0,<2.0.0",
+]
+boruta = ["Boruta>=0.3.0,<0.4.0", "matplotlib>=3.8.0,<4.0.0"]
+visualization = ["opencv-python-headless>=4.8.0,<5.0.0", "matplotlib>=3.8.0,<4.0.0"]
+survival-ml = [
+    "lifelines>=0.30.0,<1.0.0",
+    "matplotlib>=3.8.0,<4.0.0",
+    "scipy>=1.11.0,<2.0.0",
+    "scikit-survival>=0.23.0,<1.0.0",
+]
+statistics = ["numpy>=1.26.0,<2.0.0", "scipy>=1.11.0,<2.0.0"]
+radiomics = ["pyradiomics>=3.0.1,<3.1.0; python_version < '3.12'"]
+validation = ["numpy>=1.26.0,<2.0.0", "scikit-learn>=1.4.0,<2.0.0", "matplotlib>=3.8.0,<4.0.0"]
+explainability = ["numpy>=1.26.0,<2.0.0", "scikit-learn>=1.4.0,<2.0.0", "shap>=0.45.0,<1.0.0"]
+reporting = []
+audit = []
+curate = []
+feature-selection = [
+    "matplotlib>=3.8.0,<4.0.0",
+    "numpy>=1.26.0,<2.0.0",
+    "scipy>=1.11.0,<2.0.0",
+    "scikit-learn>=1.4.0,<2.0.0",
+    "Boruta>=0.3.0,<0.4.0",
+]
+descriptive = ["numpy>=1.26.0,<2.0.0", "scipy>=1.11.0,<2.0.0"]
+dicom-seg = ["highdicom>=0.28.2,<0.29", "numpy>=1.26.0,<2.0.0"]
+s3 = ["boto3>=1.34.0,<2.0.0"]
+all = [
+    "openpyxl>=3.1.0,<4.0.0",
+    "boto3>=1.34.0,<2.0.0",
+    "lifelines>=0.30.0,<1.0.0",
+    "matplotlib>=3.8.0,<4.0.0",
+    "scipy>=1.11.0,<2.0.0",
+    "scikit-survival>=0.23.0,<1.0.0",
+    "numpy>=1.26.0,<2.0.0",
+    "highdicom>=0.28.2,<0.29",
+    "scikit-learn>=1.4.0,<2.0.0",
+    "xgboost>=2.0.0,<3.0.0",
+    "joblib>=1.3.0,<2.0.0",
+    "Boruta>=0.3.0,<0.4.0",
+    "shap>=0.45.0,<1.0.0",
+    "opencv-python-headless>=4.8.0,<5.0.0",
+    "pyradiomics>=3.0.1,<3.1.0; python_version < '3.12'",
+]
+
+[project.scripts]
+fyron = "fyron.cli:main"
+curate = "fyron.curate:main"
+fyron-banner = "fyron.banner:main"
+fyron-dicom = "fyron.dicom.client:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1,<10.0.0",
+]
+
+[tool.uv.extra-build-dependencies]
+pyradiomics = ["numpy"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/fyron"]
+
+[tool.hatch.build.targets.sdist]
+exclude = ["/output/**", "/site/**"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"apps/image-curator/backend/LICENSE" = "fyron/apps/image-curator/backend/LICENSE"
+"apps/image-curator/backend/NOTICE" = "fyron/apps/image-curator/backend/NOTICE"
+"apps/image-curator/frontend/LICENSE" = "fyron/apps/image-curator/frontend/LICENSE"
+"apps/image-curator/frontend/NOTICE" = "fyron/apps/image-curator/frontend/NOTICE"
+"apps/image-curator/README.md" = "fyron/apps/image-curator/README.md"
+"apps/image-curator/docker-compose.yml" = "fyron/apps/image-curator/docker-compose.yml"
+"apps/image-curator/backend/Dockerfile" = "fyron/apps/image-curator/backend/Dockerfile"
+"apps/image-curator/backend/package.json" = "fyron/apps/image-curator/backend/package.json"
+"apps/image-curator/backend/package-lock.json" = "fyron/apps/image-curator/backend/package-lock.json"
+"apps/image-curator/backend/prisma" = "fyron/apps/image-curator/backend/prisma"
+"apps/image-curator/backend/src" = "fyron/apps/image-curator/backend/src"
+"apps/image-curator/frontend/Dockerfile" = "fyron/apps/image-curator/frontend/Dockerfile"
+"apps/image-curator/frontend/index.html" = "fyron/apps/image-curator/frontend/index.html"
+"apps/image-curator/frontend/package.json" = "fyron/apps/image-curator/frontend/package.json"
+"apps/image-curator/frontend/package-lock.json" = "fyron/apps/image-curator/frontend/package-lock.json"
+"apps/image-curator/frontend/postcss.config.js" = "fyron/apps/image-curator/frontend/postcss.config.js"
+"apps/image-curator/frontend/public" = "fyron/apps/image-curator/frontend/public"
+"apps/image-curator/frontend/src" = "fyron/apps/image-curator/frontend/src"
+"apps/image-curator/frontend/tailwind.config.js" = "fyron/apps/image-curator/frontend/tailwind.config.js"
+"apps/image-curator/frontend/vite.config.js" = "fyron/apps/image-curator/frontend/vite.config.js"
+
+[tool.hatch.build.targets.sdist.force-include]
+"apps/image-curator/backend/LICENSE" = "apps/image-curator/backend/LICENSE"
+"apps/image-curator/backend/NOTICE" = "apps/image-curator/backend/NOTICE"
+"apps/image-curator/frontend/LICENSE" = "apps/image-curator/frontend/LICENSE"
+"apps/image-curator/frontend/NOTICE" = "apps/image-curator/frontend/NOTICE"
+"apps/image-curator/README.md" = "apps/image-curator/README.md"
+"apps/image-curator/docker-compose.yml" = "apps/image-curator/docker-compose.yml"
+"apps/image-curator/backend/Dockerfile" = "apps/image-curator/backend/Dockerfile"
+"apps/image-curator/backend/package.json" = "apps/image-curator/backend/package.json"
+"apps/image-curator/backend/package-lock.json" = "apps/image-curator/backend/package-lock.json"
+"apps/image-curator/backend/prisma" = "apps/image-curator/backend/prisma"
+"apps/image-curator/backend/src" = "apps/image-curator/backend/src"
+"apps/image-curator/frontend/Dockerfile" = "apps/image-curator/frontend/Dockerfile"
+"apps/image-curator/frontend/index.html" = "apps/image-curator/frontend/index.html"
+"apps/image-curator/frontend/package.json" = "apps/image-curator/frontend/package.json"
+"apps/image-curator/frontend/package-lock.json" = "apps/image-curator/frontend/package-lock.json"
+"apps/image-curator/frontend/postcss.config.js" = "apps/image-curator/frontend/postcss.config.js"
+"apps/image-curator/frontend/public" = "apps/image-curator/frontend/public"
+"apps/image-curator/frontend/src" = "apps/image-curator/frontend/src"
+"apps/image-curator/frontend/tailwind.config.js" = "apps/image-curator/frontend/tailwind.config.js"
+"apps/image-curator/frontend/vite.config.js" = "apps/image-curator/frontend/vite.config.js"

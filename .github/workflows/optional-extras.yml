@@ -1,0 +1,54 @@
+name: Optional Extras Operations
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "18 4 * * 2"
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+      - id: matrix
+        run: echo "matrix=$(python scripts/wheel_matrix.py)" >> "$GITHUB_OUTPUT"
+      - run: uv build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: package
+          path: dist/*
+          if-no-files-found: error
+  smoke:
+    needs: package
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.package.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - uses: actions/download-artifact@v4
+        with:
+          name: package
+          path: dist
+      - name: Exercise selected extra and examples
+        run: |
+          wheels=(dist/*.whl)
+          test "${#wheels[@]}" -eq 1
+          python scripts/check_wheel.py --wheel "${wheels[0]}" --extra "${{ matrix.extra }}" ${{ matrix.workaround }}

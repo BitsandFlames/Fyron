@@ -1,0 +1,31 @@
+cff-version: 1.2.0
+message: "If you use Fyron in research, please cite the software using this metadata."
+title: "Fyron: An Open Research Companion for Healthcare Interoperability, Data Science and AI"
+version: "0.3.20b4"
+date-released: "2026-10-30"
+type: software
+license: CC-BY-NC-4.0
+authors:
+  - family-names: "Hosch"
+    given-names: "Ren\u00e9"
+  - family-names: "Borys"
+    given-names: "Katarzyna"
+  - family-names: "Warmer"
+    given-names: "Sina"
+  - family-names: "Straus"
+    given-names: "Jannis"
+  - family-names: "Hartmann"
+    given-names: "Kamyar"
+  - family-names: "Woolley"
+    given-names: "Justin"
+repository-code: "https://github.com/bitsandflames/fyron"
+url: "https://fyron.bitsandflames.ai/"
+abstract: "Fyron provides explicit Python workflows for FHIR, DICOM, BOA imaging outputs, cohort construction, manuscript statistics, survival analysis, machine learning, validation, explainability, reporting, and provenance."
+keywords:
+  - clinical data science
+  - FHIR
+  - DICOM
+  - medical imaging
+  - survival analysis
+  - machine learning
+  - reproducible research

@@ -1,0 +1,99 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum CohortStatus {
+  READY
+  EXPORTING
+  EXPORTED
+  ERROR
+}
+
+enum ReviewState {
+  ACCEPTED
+  REJECTED
+}
+
+model Cohort {
+  id               String       @id @default(cuid())
+  name             String
+  selectionContext String?      @map("selection_context")
+  createdAt        DateTime     @default(now()) @map("created_at")
+  sourceRoot       String       @map("source_root")
+  status           CohortStatus @default(READY)
+
+  images   Image[]
+  exports  Export[]
+  settings GallerySettings?
+
+  @@map("cohorts")
+}
+
+model Image {
+  id           String      @id @default(cuid())
+  cohortId     String      @map("cohort_id")
+  relativePath String      @map("relative_path")
+  originalName String      @map("original_name")
+  mimeType     String      @map("mime_type")
+  sizeBytes    Int         @map("size_bytes")
+  width        Int?
+  height       Int?
+  reviewState  ReviewState @default(ACCEPTED) @map("review_state")
+  createdAt    DateTime    @default(now()) @map("created_at")
+  updatedAt    DateTime    @updatedAt @map("updated_at")
+
+  cohort       Cohort        @relation(fields: [cohortId], references: [id], onDelete: Cascade)
+  reviewEvents ReviewEvent[]
+
+  @@unique([cohortId, relativePath])
+  @@index([cohortId, reviewState])
+  @@map("images")
+}
+
+model ReviewEvent {
+  id            String      @id @default(cuid())
+  imageId       String      @map("image_id")
+  action        String
+  previousState ReviewState @map("previous_state")
+  nextState     ReviewState @map("next_state")
+  createdAt     DateTime    @default(now()) @map("created_at")
+
+  image Image @relation(fields: [imageId], references: [id], onDelete: Cascade)
+
+  @@index([imageId, createdAt])
+  @@map("review_events")
+}
+
+model Export {
+  id            String   @id @default(cuid())
+  cohortId      String   @map("cohort_id")
+  exportRoot    String   @map("export_root")
+  acceptedCount Int      @map("accepted_count")
+  rejectedCount Int      @map("rejected_count")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  cohort Cohort @relation(fields: [cohortId], references: [id], onDelete: Cascade)
+
+  @@index([cohortId, createdAt])
+  @@map("exports")
+}
+
+model GallerySettings {
+  id            String   @id @default(cuid())
+  cohortId      String   @unique @map("cohort_id")
+  imageSize     Int      @default(180) @map("image_size")
+  gapSize       Int      @default(12) @map("gap_size")
+  imageFit      String   @default("cover") @map("image_fit")
+  sortKey       String   @default("relativePath") @map("sort_key")
+  sortDirection String   @default("asc") @map("sort_direction")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  cohort Cohort @relation(fields: [cohortId], references: [id], onDelete: Cascade)
+
+  @@map("gallery_settings")
+}

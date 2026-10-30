@@ -1,0 +1,41 @@
+Copyright (c) 2026 Bits & Flames
+
+Current Fyron source, Fyron Curate (frontend and backend), and associated
+project documentation are offered under Creative Commons Attribution-
+NonCommercial 4.0 International (CC BY-NC 4.0). See LICENSE and
+https://creativecommons.org/licenses/by-nc/4.0/.
+
+This licensing change does not revoke permissions for material already
+released under MIT, including v0.3.20b3 and earlier MIT releases. Recipients
+may continue using that previously licensed material under MIT. The MIT
+notice below is retained for that material; it does not independently grant
+MIT permissions for new material offered only under CC BY-NC 4.0.
+
+Third-party dependencies, fonts, and separately licensed components retain
+their own licenses and notices. No trademark rights are granted by this notice.
+For commercial permissions beyond existing grants, contact hello@bitsandflames.ai.
+
+Earlier MIT notice
+==================
+
+MIT License
+
+Copyright (c) 2026 Bits & Flames
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

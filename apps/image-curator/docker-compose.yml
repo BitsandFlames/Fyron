@@ -1,0 +1,47 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: image_curator
+      POSTGRES_USER: image_curator
+      POSTGRES_PASSWORD: image_curator
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U image_curator -d image_curator"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  backend:
+    build:
+      context: ./backend
+    environment:
+      DATABASE_URL: postgresql://image_curator:image_curator@postgres:5432/image_curator?schema=public
+      PORT: "4000"
+      UPLOAD_ROOT: /data/uploads
+      EXPORT_ROOT: /data/exports
+      CORS_ORIGIN: http://localhost:5174
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:4000:4000"
+    volumes:
+      - uploaded_cohorts:/data/uploads
+      - clean_exports:/data/exports
+
+  frontend:
+    build:
+      context: ./frontend
+    environment:
+      VITE_API_BASE_URL: http://localhost:4000/api
+    depends_on:
+      - backend
+    ports:
+      - "127.0.0.1:5174:5174"
+
+volumes:
+  postgres_data:
+  uploaded_cohorts:
+  clean_exports:

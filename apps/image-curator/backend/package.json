@@ -1,0 +1,30 @@
+{
+  "name": "@bitsandflames/image-curator-backend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.12"
+  },
+  "scripts": {
+    "dev": "prisma db push && node --watch src/server.js",
+    "start": "node src/server.js",
+    "start:migrate": "prisma db push && node src/server.js",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.22.0",
+    "cors": "^2.8.5",
+    "dicom-parser": "^1.8.21",
+    "express": "^4.21.2",
+    "image-size": "^2.0.4",
+    "mime-types": "^2.1.35",
+    "multer": "^2.5.0",
+    "prisma": "^5.22.0"
+  },
+  "devDependencies": {
+    "supertest": "^7.0.0",
+    "vitest": "^4.1.12"
+  },
+  "license": "CC-BY-NC-4.0"
+}
