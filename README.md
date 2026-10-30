@@ -74,16 +74,16 @@ Start with a single helper or put together a whole workflow. The synthetic examp
 Add Fyron to your project with **Python 3.11+**:
 
 ```bash
-uv add "fyron @ https://github.com/BitsandFlames/Fyron/releases/download/v0.3.20b4/fyron-0.3.20b4-py3-none-any.whl"
+uv add "fyron==0.3.20b4"
 ```
 
 This release is **0.3.20 Beta 4**. Pin your study's version and review methods and outputs for your research question. Software checks do not replace scientific validation.
 
-Current Fyron and Curate source is **available under CC BY-NC 4.0** for noncommercial use with attribution. Commercial use beyond existing permissions requires separate permission. Previously published MIT versions, including Beta 3, retain their MIT permissions. See [licensing details](https://fyron.bitsandflames.ai/repository-trust/#license).
+Current Fyron and Curate source is **available under CC BY-NC 4.0** for noncommercial use with attribution. Commercial use beyond existing permissions requires separate permission.
 
 ## Cite Fyron
 
-If Fyron supports your research, including image selection with Curate, please acknowledge the people behind it:
+CC BY-NC 4.0 requires appropriate attribution, a license link, and an indication of changes when sharing adapted material. For research using Fyron or Curate, use the software citation below:
 
 > René Hosch, Katarzyna Borys, Sina Warmer, Jannis Straus, Kamyar Hartmann, and Justin Woolley (2026).
 > **Fyron** (Version 0.3.20b4) [Computer software]. Bits & Flames.

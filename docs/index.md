@@ -8,7 +8,7 @@
     </div>
     <div class="bf-code bf-hero-install">
       <div class="bf-code__bar"><strong>Bash</strong><span>Python 3.11+</span></div>
-      <pre><code class="language-bash">uv add &quot;fyron @ https://github.com/BitsandFlames/Fyron/releases/download/v0.3.20b4/fyron-0.3.20b4-py3-none-any.whl&quot;</code></pre>
+      <pre><code class="language-bash">uv add &quot;fyron==0.3.20b4&quot;</code></pre>
     </div>
   </div>
 
@@ -83,5 +83,3 @@ Please cite the version used in your work, including studies using **Fyron Curat
 </div>
 
 [Citation metadata](https://github.com/bitsandflames/fyron/blob/main/CITATION.cff) · [Research and citation guidance](repository-trust.md)
-
-Citation is appreciated, not a license requirement.

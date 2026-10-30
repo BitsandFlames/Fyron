@@ -80,8 +80,6 @@ Images were reviewed and selected using Fyron Curate (Fyron version X.Y.Z).
 
 Replace X.Y.Z with your installed version and report the study's selection criteria, who performed the review, and how accepted/rejected decisions were used. Adapt the sentence to describe what you actually did; citing the tool does not replace documenting the selection process.
 
-Citation is a scholarly request, not an additional license condition.
-
 ## Related Pages
 
 - [Start the app](curate/start.md)

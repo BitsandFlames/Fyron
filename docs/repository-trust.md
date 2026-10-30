@@ -26,7 +26,7 @@ If Fyron contributes to a paper, thesis, or dataset, please cite the version you
 
 [Copy the current citation and BibTeX](index.md#citation) · [Download citation metadata](https://github.com/BitsandFlames/Fyron/blob/main/CITATION.cff) · [Curate citation guidance](applications/curate.md#citation)
 
-If your release has a verified Zenodo record, use its version-specific DOI. A Git tag or citation file alone does not create a DOI. Citation is a scholarly request, not an additional license requirement.
+If your release has a verified Zenodo record, use its version-specific DOI. A Git tag or citation file alone does not create a DOI.
 
 ## Know where your data goes
 
