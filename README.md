@@ -1,4 +1,4 @@
-![Fyron: a fireplace for research. Pixel-art researchers and developers gathered around a campfire.](https://fyron.bitsandflames.ai/assets/fyron-banner.png)
+![Fyron: a fireplace for research. Pixel-art researchers and developers gathered around a campfire.](https://fyron.bitsandflames.ai/assets/fyron-banner.png?v=0.3.20b4)
 
 <p align="center">
   <a href="https://github.com/BitsandFlames/Fyron/releases/tag/v0.3.20b4"><img alt="Fyron 0.3.20b4 · beta" src="https://img.shields.io/badge/release-0.3.20b4%20%C2%B7%20beta-FF6A1A" /></a>
