@@ -23,7 +23,7 @@
     "prisma": "^5.22.0"
   },
   "devDependencies": {
-    "supertest": "^7.0.0",
+    "supertest": "^7.3.1",
     "vitest": "^4.1.12"
   },
   "license": "CC-BY-NC-4.0"
