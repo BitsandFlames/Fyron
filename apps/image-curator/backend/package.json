@@ -18,7 +18,7 @@
     "dicom-parser": "^1.8.21",
     "express": "^4.21.2",
     "image-size": "^2.0.4",
-    "mime-types": "^2.1.35",
+    "mime-types": "^3.0.2",
     "multer": "^2.5.0",
     "prisma": "^5.22.0"
   },
