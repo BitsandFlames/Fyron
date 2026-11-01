@@ -5,8 +5,9 @@ Use this when you need a local review workspace for accepting and rejecting imag
 ## Install And Start
 
 ```bash
-uv add "fyron[curate]"
-fyron curate --open
+git clone https://github.com/BitsandFlames/Curate.git
+cd Curate
+docker compose up --build -d
 ```
 
 Docker Desktop or another Docker Compose runtime must be running.

@@ -25,7 +25,6 @@ uv add "fyron[feature-selection]"
 uv add "fyron[dicom-seg]"
 uv add "fyron[visualization]"
 uv add "fyron[radiomics]"
-uv add "fyron[curate]"
 ```
 
 Use `fyron[all]` for notebooks, tutorials, and broad exploration. Use targeted extras in servers, CI, reproducible environments, and assistant-generated setup instructions.

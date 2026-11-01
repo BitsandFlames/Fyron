@@ -15,7 +15,7 @@ The base installation is enough for many integration workflows. Add extras only 
 | Model validation helpers such as thresholds, calibration, decision curves, or subgroup metrics | `uv add "fyron[validation]"` |
 | BOA collages, image review previews, or visual volume comparisons | `uv add "fyron[visualization]"` |
 | DICOM SEG export | `uv add "fyron[dicom-seg]"` |
-| Local image cohort review with Curate | `uv add "fyron[curate]"` |
+| Local image cohort review with Curate | [Install Curate](https://github.com/BitsandFlames/Curate) |
 | Excel files or S3/object storage | `uv add "fyron[excel]"` or `uv add "fyron[s3]"` |
 
 ## Base Package
@@ -69,7 +69,7 @@ This includes the heavier scientific extras such as survival ML, DICOM SEG, BOA 
 | `fyron[survival-ml]` | scikit-survival plus survival dependencies |
 | `fyron[dicom-seg]` | highdicom for DICOM SEG export |
 | `fyron[radiomics]` | PyRadiomics; intended for Python 3.11 |
-| `fyron[curate]` | Docker Compose runtime plus local browser |
+| [standalone Curate](https://github.com/BitsandFlames/Curate) | Docker Compose runtime plus local browser |
 | Docs | Custom static docs builder in `scripts/build_docs.py` |
 
 Fyron is in public beta. The base package and main workflow modules are tested in CI, while heavyweight optional extras depend on upstream scientific package compatibility.

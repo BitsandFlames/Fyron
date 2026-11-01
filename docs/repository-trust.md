@@ -20,13 +20,15 @@ Use [cohort flow tracking](modules/flow.md) to document selection steps and [aud
 
 ## Cite Fyron, including Curate
 
-If Fyron contributes to a paper, thesis, or dataset, please cite the version you used. Curate uses the same software citation. In Methods, describe its role and the criteria used to accept or reject images.
+If Fyron contributes to a paper, thesis, or dataset, please cite the version you used. Earlier Curate versions bundled with Fyron use the same software citation. In Methods, describe its role and the criteria used to accept or reject images.
 
 > René Hosch, Katarzyna Borys, Sina Warmer, Jannis Straus, Kamyar Hartmann, and Justin Woolley. *Fyron: An Open Research Companion for Healthcare Interoperability, Data Science and AI.* Bits & Flames. Include the version and release year used in your study.
 
 [Copy the current citation and BibTeX](index.md#citation) · [Download citation metadata](https://github.com/BitsandFlames/Fyron/blob/main/CITATION.cff) · [Curate citation guidance](applications/curate.md#citation)
 
 If your release has a verified Zenodo record, use its version-specific DOI. A Git tag or citation file alone does not create a DOI.
+
+Standalone [Curate](https://github.com/BitsandFlames/Curate) now has its own [citation metadata](https://github.com/BitsandFlames/Curate/blob/main/CITATION.cff). The bundled-version guidance above applies to earlier Fyron distributions.
 
 ## Know where your data goes
 

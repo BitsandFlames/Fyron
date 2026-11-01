@@ -21,7 +21,7 @@ Before writing code, identify the workflow:
 | DICOMweb or local DICOM/NIfTI | `fyron.DICOMDownloader`, `fyron.imaging`, `references/dicom-imaging.md` |
 | OIDC document/PDF downloads | `fyron.DocumentDownloader`, `fyron document-download` |
 | CT/MRI/X-ray previews for review | `fyron dataset-curate-previews`, `references/curate.md` |
-| Local image cohort review | `fyron curate`, `references/curate.md` |
+| Local image cohort review | [standalone Curate](https://github.com/BitsandFlames/Curate), `references/curate.md` |
 | BOA/body-composition features | `fyron.boa_extraction`, `fyron.boa_radiomics` |
 | Cohorts and endpoints | `fyron.cohort`, `fyron.phenotyping`, `fyron.clinical_codes`, `fyron.dataframe` |
 | Table 1, tests, effect sizes | `fyron.descriptive`, `fyron.statistics`, `fyron.reporting` |
@@ -47,7 +47,6 @@ Use targeted extras for lean installs:
 uv add "fyron[ml,statistics,descriptive,validation,explainability]"
 uv add "fyron[survival,survival-ml]"
 uv add "fyron[dicom-seg,visualization,radiomics]"
-uv add "fyron[curate]"
 ```
 
 With pip:
@@ -130,7 +129,7 @@ Curate previews:
 
 ```bash
 fyron dataset-curate-previews --input-dir imaging_exports/ --output-dir curate_previews/
-fyron curate
+# Start Curate separately: https://github.com/BitsandFlames/Curate
 ```
 
 Plotting:

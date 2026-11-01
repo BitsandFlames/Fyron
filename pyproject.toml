@@ -61,7 +61,6 @@ validation = ["numpy>=1.26.0,<2.0.0", "scikit-learn>=1.4.0,<2.0.0", "matplotlib>
 explainability = ["numpy>=1.26.0,<2.0.0", "scikit-learn>=1.4.0,<2.0.0", "shap>=0.45.0,<1.0.0"]
 reporting = []
 audit = []
-curate = []
 feature-selection = [
     "matplotlib>=3.8.0,<4.0.0",
     "numpy>=1.26.0,<2.0.0",
@@ -92,7 +91,6 @@ all = [
 
 [project.scripts]
 fyron = "fyron.cli:main"
-curate = "fyron.curate:main"
 fyron-banner = "fyron.banner:main"
 fyron-dicom = "fyron.dicom.client:main"
 
@@ -112,48 +110,4 @@ build-backend = "hatchling.build"
 packages = ["src/fyron"]
 
 [tool.hatch.build.targets.sdist]
-exclude = ["/output/**", "/site/**"]
-
-[tool.hatch.build.targets.wheel.force-include]
-"apps/image-curator/backend/LICENSE" = "fyron/apps/image-curator/backend/LICENSE"
-"apps/image-curator/backend/NOTICE" = "fyron/apps/image-curator/backend/NOTICE"
-"apps/image-curator/frontend/LICENSE" = "fyron/apps/image-curator/frontend/LICENSE"
-"apps/image-curator/frontend/NOTICE" = "fyron/apps/image-curator/frontend/NOTICE"
-"apps/image-curator/README.md" = "fyron/apps/image-curator/README.md"
-"apps/image-curator/docker-compose.yml" = "fyron/apps/image-curator/docker-compose.yml"
-"apps/image-curator/backend/Dockerfile" = "fyron/apps/image-curator/backend/Dockerfile"
-"apps/image-curator/backend/package.json" = "fyron/apps/image-curator/backend/package.json"
-"apps/image-curator/backend/package-lock.json" = "fyron/apps/image-curator/backend/package-lock.json"
-"apps/image-curator/backend/prisma" = "fyron/apps/image-curator/backend/prisma"
-"apps/image-curator/backend/src" = "fyron/apps/image-curator/backend/src"
-"apps/image-curator/frontend/Dockerfile" = "fyron/apps/image-curator/frontend/Dockerfile"
-"apps/image-curator/frontend/index.html" = "fyron/apps/image-curator/frontend/index.html"
-"apps/image-curator/frontend/package.json" = "fyron/apps/image-curator/frontend/package.json"
-"apps/image-curator/frontend/package-lock.json" = "fyron/apps/image-curator/frontend/package-lock.json"
-"apps/image-curator/frontend/postcss.config.js" = "fyron/apps/image-curator/frontend/postcss.config.js"
-"apps/image-curator/frontend/public" = "fyron/apps/image-curator/frontend/public"
-"apps/image-curator/frontend/src" = "fyron/apps/image-curator/frontend/src"
-"apps/image-curator/frontend/tailwind.config.js" = "fyron/apps/image-curator/frontend/tailwind.config.js"
-"apps/image-curator/frontend/vite.config.js" = "fyron/apps/image-curator/frontend/vite.config.js"
-
-[tool.hatch.build.targets.sdist.force-include]
-"apps/image-curator/backend/LICENSE" = "apps/image-curator/backend/LICENSE"
-"apps/image-curator/backend/NOTICE" = "apps/image-curator/backend/NOTICE"
-"apps/image-curator/frontend/LICENSE" = "apps/image-curator/frontend/LICENSE"
-"apps/image-curator/frontend/NOTICE" = "apps/image-curator/frontend/NOTICE"
-"apps/image-curator/README.md" = "apps/image-curator/README.md"
-"apps/image-curator/docker-compose.yml" = "apps/image-curator/docker-compose.yml"
-"apps/image-curator/backend/Dockerfile" = "apps/image-curator/backend/Dockerfile"
-"apps/image-curator/backend/package.json" = "apps/image-curator/backend/package.json"
-"apps/image-curator/backend/package-lock.json" = "apps/image-curator/backend/package-lock.json"
-"apps/image-curator/backend/prisma" = "apps/image-curator/backend/prisma"
-"apps/image-curator/backend/src" = "apps/image-curator/backend/src"
-"apps/image-curator/frontend/Dockerfile" = "apps/image-curator/frontend/Dockerfile"
-"apps/image-curator/frontend/index.html" = "apps/image-curator/frontend/index.html"
-"apps/image-curator/frontend/package.json" = "apps/image-curator/frontend/package.json"
-"apps/image-curator/frontend/package-lock.json" = "apps/image-curator/frontend/package-lock.json"
-"apps/image-curator/frontend/postcss.config.js" = "apps/image-curator/frontend/postcss.config.js"
-"apps/image-curator/frontend/public" = "apps/image-curator/frontend/public"
-"apps/image-curator/frontend/src" = "apps/image-curator/frontend/src"
-"apps/image-curator/frontend/tailwind.config.js" = "apps/image-curator/frontend/tailwind.config.js"
-"apps/image-curator/frontend/vite.config.js" = "apps/image-curator/frontend/vite.config.js"
+exclude = ["/output/**", "/site/**", "/apps/**", "/docs/quickstarts/rest-and-sql-onboarding.md"]

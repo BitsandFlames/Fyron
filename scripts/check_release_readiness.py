@@ -211,12 +211,7 @@ def check_package_archives(dist_dir: Path) -> CheckResult:
         return CheckResult("package_archives", False, f"no fyron archives found in {relative(dist_dir)}")
 
     blocked: list[str] = []
-    required = {
-        "fyron/apps/image-curator/docker-compose.yml": False,
-        "fyron/apps/image-curator/backend/package.json": False,
-        "fyron/apps/image-curator/frontend/package.json": False,
-        "fyron/apps/image-curator/backend/prisma/schema.prisma": False,
-    }
+    required = {"fyron/visualization/curate_previews.py": False}
     for archive in archives:
         if archive.suffix == ".whl":
             with zipfile.ZipFile(archive) as package:
@@ -231,7 +226,7 @@ def check_package_archives(dist_dir: Path) -> CheckResult:
         for name in names:
             parts = set(Path(name).parts)
             suffix = Path(name).suffix.lower()
-            if parts & BLOCKED_PACKAGE_PARTS or suffix in BLOCKED_PACKAGE_SUFFIXES:
+            if parts & BLOCKED_PACKAGE_PARTS or suffix in BLOCKED_PACKAGE_SUFFIXES or "image-curator" in parts or name.endswith("fyron/curate.py"):
                 blocked.append(f"{archive.name}:{name}")
             if any(pattern.search(name) for pattern in BLOCKED_WORKBENCH_PATTERNS):
                 blocked.append(f"{archive.name}:{name}")
@@ -244,7 +239,7 @@ def check_package_archives(dist_dir: Path) -> CheckResult:
         if blocked:
             details.append("blocked package paths: " + ", ".join(blocked[:8]))
         if missing:
-            details.append("missing Curate paths: " + ", ".join(missing))
+            details.append("missing preview helper paths: " + ", ".join(missing))
         return CheckResult("package_archives", False, "; ".join(details))
     return CheckResult("package_archives", True, f"checked {len(archives)} archive(s)")
 

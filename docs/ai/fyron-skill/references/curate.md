@@ -1,19 +1,20 @@
-# Fyron Curate Agent Notes
+# Curate Agent Notes
 
-Curate is Fyron's local image cohort review app. Use it when the user needs to quickly review folders, reject bad images, and create a clean accepted folder.
+Curate is a separate Bits & Flames image cohort review app. Use it when the user needs to quickly review folders, reject bad images, and create a clean accepted folder.
 
 Install and start:
 
 ```bash
-uv add "fyron[curate]"
-fyron curate
+git clone https://github.com/BitsandFlames/Curate.git
+cd Curate
+docker compose up --build -d
 ```
 
 Prepare CT/MRI/X-ray previews first:
 
 ```bash
 fyron dataset-curate-previews --input-dir imaging_exports/ --output-dir curate_previews/
-fyron curate
+# Start Curate separately: https://github.com/BitsandFlames/Curate
 ```
 
 Supported review inputs:

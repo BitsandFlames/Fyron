@@ -157,7 +157,7 @@ def test_public_beta_ci_smoke_checks_are_documented():
     assert "scripts/check_wheel.py" in ci
     assert "actions/download-artifact@v4" in ci
     probe = (ROOT / "scripts" / "wheel_probe.py").read_text(encoding="utf-8")
-    assert '"curate", "--help"' in probe
+    assert '"curate", "--help"' not in probe
     assert "scripts/wheel_matrix.py" in optional
     assert "scripts/check_wheel.py" in optional
     assert "workflow_dispatch" in optional

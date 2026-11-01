@@ -37,13 +37,6 @@ def main(argv: list[str] | None = None) -> int:
     docs = sub.add_parser("docs-build", help="Build the BF-native documentation site")
     docs.add_argument("--script", default="scripts/build_docs.py")
     docs.set_defaults(func=_cmd_docs_build)
-    curate = sub.add_parser("curate", help="Start the Fyron image curation web app")
-    curate.add_argument("--app-dir", help="Path to apps/image-curator when running outside a Fyron source checkout")
-    curate.add_argument("--no-build", action="store_true", help="Start without rebuilding Docker images")
-    curate.add_argument("--foreground", action="store_true", help="Run Docker Compose in the foreground")
-    curate.add_argument("--open", action="store_true", help="Open the app URL in the default browser")
-    curate.set_defaults(func=_cmd_curate)
-
     _add_fhir_rest_parser(sub)
     _add_fhir_build_bundle_parser(sub)
     _add_dicom_download_parser(sub)
@@ -210,7 +203,7 @@ def _add_imaging_qc_parser(sub: argparse._SubParsersAction) -> None:
 
 
 def _add_dataset_curate_previews_parser(sub: argparse._SubParsersAction) -> None:
-    p = sub.add_parser("dataset-curate-previews", help="Prepare PNG previews for Fyron Curate")
+    p = sub.add_parser("dataset-curate-previews", help="Prepare PNG previews for Curate")
     p.add_argument("--input-dir", required=True, help="Directory with CT/MRI volumes, DICOM series, or 2-D images")
     p.add_argument("--output-dir", required=True, help="Curate-ready output image folder")
     p.add_argument("--no-recursive", action="store_true", help="Do not scan nested folders")
@@ -288,19 +281,6 @@ def _cmd_docs_build(args: argparse.Namespace) -> int:
     runpy.run_path(str(Path(args.script)), run_name="__main__")
     _emit(args, "Built Fyron docs.", outputs=["site/"])
     return 0
-
-
-def _cmd_curate(args: argparse.Namespace) -> int:
-    from fyron.curate import start_curator
-
-    return start_curator(
-        app_dir=args.app_dir,
-        build=not args.no_build,
-        detached=not args.foreground,
-        open_browser=args.open,
-        color=args.color,
-        quiet=args.quiet,
-    )
 
 
 def _cmd_fhir_rest(args: argparse.Namespace) -> int:

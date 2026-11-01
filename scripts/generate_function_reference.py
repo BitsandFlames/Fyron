@@ -18,7 +18,6 @@ MISSING_PARAM = "See signature."
 PRIORITY_DOCSTRING_MODULES = (
     "fyron",
     "fyron.core.io",
-    "fyron.curate",
     "fyron.dicom.client",
     "fyron.fhir.rest",
     "fyron.imaging.",
@@ -32,7 +31,7 @@ PRIORITY_DOCSTRING_MODULES = (
     "fyron.survival.",
 )
 PRIORITY_DOCSTRING_GUIDANCE = (
-    "`fyron`, `core`, `fhir`, `dicom`, `imaging`, `survival`, `ml`, `plotting`, and `curate` "
+    "`fyron`, `core`, `fhir`, `dicom`, `imaging`, `survival`, `ml`, and `plotting` "
     "are the first public-beta documentation surfaces. Treat the priority backlog as the milestone "
     "for first external users; the full backlog below remains useful for long-tail polishing."
 )

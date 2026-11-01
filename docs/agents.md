@@ -52,8 +52,8 @@ You do not need to paste private data. A small synthetic table with the same col
 | FHIR extraction | [FHIR](modules/fhir.md), [FHIR REST](modules/fhir/rest.md), [FHIR examples](example-gallery.md) |
 | DICOMweb downloads | [DICOM](modules/dicom.md), [DICOMDownloader](modules/dicom/downloader.md) |
 | DICOM/NIfTI image QC | [Imaging](modules/imaging.md), [BOA Visualization](modules/visualization.md) |
-| Curate image review | [Fyron Curate](applications/curate.md), [Unified CLI](modules/cli.md) |
-| CT/MRI preview PNG folders | [BOA Visualization](modules/visualization.md#curate-preview-preparation), [Fyron Curate](applications/curate.md) |
+| Curate image review | [Curate](applications/curate.md), [Unified CLI](modules/cli.md) |
+| CT/MRI preview PNG folders | [BOA Visualization](modules/visualization.md#curate-preview-preparation), [Curate](applications/curate.md) |
 | BOA features or radiomics | [BOA](modules/boa.md), [BOA Extraction](modules/boa-extraction.md), [BOA Radiomics](modules/boa-radiomics.md) |
 | Cohort and endpoints | [Cohort Tables](modules/cohort.md), [Phenotyping](modules/phenotyping.md) |
 | Table 1 and summaries | [Descriptive Analysis](modules/descriptive.md), [Reporting](modules/reporting.md) |
@@ -78,7 +78,7 @@ https://fyron.bitsandflames.ai/modules/cohort/ and keep all column names explici
 
 ```text
 Using Fyron, create a terminal workflow for preparing a nested folder of CT/MRI
-or X-ray exports for Fyron Curate. Use fyron dataset-curate-previews, write PNGs
+or X-ray exports for Curate. Use fyron dataset-curate-previews, write PNGs
 to curate_previews/, explain which formats are supported, and include the command
 to start Curate locally.
 ```

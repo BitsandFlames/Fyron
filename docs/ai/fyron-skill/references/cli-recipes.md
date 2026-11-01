@@ -60,7 +60,7 @@ Curate previews and app:
 
 ```bash
 fyron dataset-curate-previews --input-dir imaging_exports/ --output-dir curate_previews/
-fyron curate
+# Start Curate separately: https://github.com/BitsandFlames/Curate
 ```
 
 BOA:

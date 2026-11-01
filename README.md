@@ -44,7 +44,7 @@ Fyron covers the journey from accessing healthcare data to sharing research resu
 - **Body and Organ Analysis (`boa_extraction`):** Extract cohort measurements from existing BOA outputs with case-level reports.
 - **BOA radiomics (`boa_radiomics`):** Calculate radiomic features from images and BOA segmentation masks.
 - **Image visualization (`visualization`):** Create segmentation collages, aligned CT/MR difference maps, and previews for Curate.
-- **Fyron Curate (`curate`):** Review images locally, accept or reject cases, save decisions, and export selected datasets.
+- **[Curate](https://github.com/BitsandFlames/Curate) (separate app):** Review images locally, accept or reject cases, save decisions, and export selected datasets.
 - **Clinical codes (`clinical_codes`):** Work with ICD-10, OPS, MDC, Charlson comorbidity scores, and encounter indicators.
 - **DataFrame helpers (`dataframe`):** Derive code indicators, date intervals, age, and time-window features.
 - **Cohorts (`cohort`):** Join patient tables, construct endpoints, and audit joins and follow-up definitions.
@@ -79,11 +79,11 @@ uv add "fyron==0.3.20b4"
 
 This release is **0.3.20 Beta 4**. Pin your study's version and review methods and outputs for your research question. Software checks do not replace scientific validation.
 
-Current Fyron and Curate source is **available under CC BY-NC 4.0** for noncommercial use with attribution. Commercial use beyond existing permissions requires separate permission.
+Current Fyron source is **available under CC BY-NC 4.0** for noncommercial use with attribution. Commercial use beyond existing permissions requires separate permission.
 
 ## Cite Fyron
 
-CC BY-NC 4.0 requires appropriate attribution, a license link, and an indication of changes when sharing adapted material. For research using Fyron or Curate, use the software citation below:
+CC BY-NC 4.0 requires appropriate attribution, a license link, and an indication of changes when sharing adapted material. For research using Fyron, use the software citation below. Standalone [Curate has its own citation](https://github.com/BitsandFlames/Curate/blob/main/CITATION.cff); cite Fyron for earlier bundled versions:
 
 > René Hosch, Katarzyna Borys, Sina Warmer, Jannis Straus, Kamyar Hartmann, and Justin Woolley (2026).
 > **Fyron** (Version 0.3.20b4) [Computer software]. Bits & Flames.

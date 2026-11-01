@@ -14,7 +14,7 @@ Use this page for exact call signatures. Use the linked module guides for input 
 - [Cohort And Analysis Reference](cohort-analysis.md): 74 top-level public APIs.
 - [Survival Reference](survival.md): 21 top-level public APIs.
 - [ML, Validation, And Explainability Reference](ml-validation.md): 97 top-level public APIs.
-- [Core, Publication, And Utility Reference](core-publication.md): 101 top-level public APIs.
+- [Core, Publication, And Utility Reference](core-publication.md): 98 top-level public APIs.
 
 ## Public API Index
 
@@ -513,9 +513,6 @@ Use this page for exact call signatures. Use the linked module guides for input 
 - [`fyron.core.s3.parse_s3_uri`](core-publication.md#fyroncores3parses3uri)
 - [`fyron.core.s3.read_s3_table`](core-publication.md#fyroncores3reads3table)
 - [`fyron.core.s3.write_s3_table`](core-publication.md#fyroncores3writes3table)
-- [`fyron.curate.build_compose_command`](core-publication.md#fyroncuratebuildcomposecommand)
-- [`fyron.curate.default_app_dir`](core-publication.md#fyroncuratedefaultappdir)
-- [`fyron.curate.start_curator`](core-publication.md#fyroncuratestartcurator)
 - [`fyron.datasets.make_boa_like_folder`](core-publication.md#fyrondatasetsmakeboalikefolder)
 - [`fyron.datasets.make_classification_cohort`](core-publication.md#fyrondatasetsmakeclassificationcohort)
 - [`fyron.datasets.make_clinical_cohort`](core-publication.md#fyrondatasetsmakeclinicalcohort)

@@ -47,7 +47,7 @@ Fyron is a Python toolkit for interoperable healthcare data and AI workflows. Pr
 | BOA radiomics from `body-regions.nii.gz` or `total.nii.gz` | `fyron.boa_radiomics` with `fyron[radiomics]` |
 | BOA segmentation collages and aligned CT/MR difference heatmaps | `fyron.visualization` |
 | Prepare CT/MRI folders as PNG previews for Curate | `fyron.visualization.prepare_curate_image_previews`, `fyron dataset-curate-previews` |
-| Local image cohort curation dashboard | `fyron curate` with `fyron[curate]` |
+| Local image cohort curation dashboard | [standalone Curate](https://github.com/BitsandFlames/Curate) |
 | Repeatable terminal workflows | unified `fyron` CLI |
 
 ## Dependency Extras
@@ -69,7 +69,7 @@ Fyron is a Python toolkit for interoperable healthcare data and AI workflows. Pr
 - `fyron[ml,boruta]`: Boruta feature selection.
 - `fyron[visualization]`: BOA/OpenCV collages and Matplotlib CT/MR difference heatmaps.
 - `fyron[radiomics]`: PyRadiomics feature extraction from BOA segmentations; currently use Python 3.11 because PyRadiomics 3.0.1 does not build on Python 3.12.
-- `fyron[curate]`: local Docker Compose image cohort review app launched with `fyron curate`.
+- [standalone Curate](https://github.com/BitsandFlames/Curate): separate Docker Compose image-review app; no Fyron launcher or extra is provided in current source.
 
 Use `fyron[all]` for local workstations, tutorials, and full-feature exploration. Prefer targeted extras for lean deployments and for missing-dependency messages. If adding an import from an optional dependency, place it behind the relevant module/extra and raise a clear `ImportError` with the targeted install command.
 
@@ -127,7 +127,7 @@ Prefer the unified `fyron` command for repeatable jobs:
 - `fyron dataset-nnunetv2`, `fyron dataset-yolo-classify`, and `fyron dataset-yolo-detect` for training dataset folder preparation.
 - `fyron dataset-curate-previews` for CT/MRI/X-ray PNG previews that can be dropped into Curate.
 - `fyron boa-extract` and `fyron boa-radiomics` for BOA tables.
-- `fyron curate` for the local image cohort curation app.
+- Use [standalone Curate](https://github.com/BitsandFlames/Curate) for image cohort review; Fyron prepares previews.
 - `fyron imaging-qc` for geometry, alignment, mask volume, and intensity checks.
 - `fyron audit-manifest` for provenance.
 - `fyron spark` for the opt-in Bits & Flames/Fyron banner easter egg.
@@ -247,4 +247,4 @@ Explain token renewal as demand-driven, not background keep-alive. Static Bearer
 
 ## Licensing
 
-Current project source and Curate frontend/backend use CC BY-NC 4.0. Describe it as source available for noncommercial use with attribution, not OSI open source or research-only. Preserve third-party licenses and earlier MIT permissions. Never rewrite historical release licensing or replace published artifacts; a future distribution of the license change needs a new version. Keep package metadata, Docker labels, Curate's public license files and documentation consistent.
+Fyron source and the separate Curate project use CC BY-NC 4.0. Describe it as source available for noncommercial use with attribution, not OSI open source or research-only. Preserve third-party licenses and earlier MIT permissions. Never rewrite historical release licensing or replace published artifacts; a future distribution of the license change needs a new version. Keep package metadata, Docker labels, Curate's public license files and documentation consistent.

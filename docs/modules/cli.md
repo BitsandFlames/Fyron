@@ -55,7 +55,7 @@ Normal commands do not print the banner on startup, which keeps notebooks, CI lo
 | `fyron document-download` | Download documents with OIDC device or service-account auth | Files and sensitive results CSV |
 | `fyron synthetic-dicom` | Export generated NIfTI volumes as synthetic DICOM series | DICOM files and manifest CSV |
 | `fyron dicom-seg` | Write source-referenced DICOM SEG objects | `.seg.dcm` |
-| `fyron dataset-curate-previews` | Prepare CT/MRI/X-ray PNG previews for Fyron Curate | PNG folder and manifest CSV |
+| `fyron dataset-curate-previews` | Prepare CT/MRI/X-ray PNG previews for Curate | PNG folder and manifest CSV |
 | `fyron dataset-nnunetv2` | Prepare nnU-Net v2 segmentation folders | NIfTI dataset folder and manifest |
 | `fyron dataset-yolo-classify` | Prepare YOLO classification folders | split/class image folders |
 | `fyron dataset-yolo-detect` | Prepare YOLO detection folders and labels | images, labels, `data.yaml` |
@@ -66,16 +66,16 @@ Normal commands do not print the banner on startup, which keeps notebooks, CI lo
 
 ## Curate Preview And Review Workflow
 
-Use `dataset-curate-previews` when CT/MRI folders, DICOM series, X-rays, or topograms need to become ordinary PNG files for Fyron Curate. The command scans nested folders by default, writes preview PNGs, and creates a manifest that maps each preview back to its source.
+Use `dataset-curate-previews` when CT/MRI folders, DICOM series, X-rays, or topograms need to become ordinary PNG files for Curate. The command scans nested folders by default, writes preview PNGs, and creates a manifest that maps each preview back to its source.
 
 ```bash
-uv add "fyron[visualization,curate]"
+uv add "fyron[visualization]"
 
 fyron dataset-curate-previews \
   --input-dir ct_exports/ \
   --output-dir curate_previews/
 
-fyron curate
+# Start Curate separately: https://github.com/BitsandFlames/Curate
 ```
 
 Drop `curate_previews/` into the Curate **Add cohort** dialog. Three-dimensional volumes produce middle axial, coronal, and sagittal images. Two-dimensional images produce one preview image.

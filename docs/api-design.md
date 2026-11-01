@@ -86,7 +86,7 @@ Before adding a public function, confirm:
 ## Related Pages
 
 - [Using Fyron In Research](repository-trust.md)
-- [Fyron Curate](applications/curate.md)
+- [Curate](applications/curate.md)
 - [Modules Overview](modules/index.md)
 - [Function Reference](function-reference.md)
 - [Complete Function Reference](reference/index.md)

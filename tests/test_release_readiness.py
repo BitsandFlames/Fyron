@@ -8,29 +8,6 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-CURATE_APP_ROOT = ROOT / "apps" / "image-curator"
-CURATE_PACKAGED_ASSET_EXTENSIONS = (
-    ".bmp",
-    ".dcm",
-    ".dicom",
-    ".gif",
-    ".jpeg",
-    ".jpg",
-    ".mha",
-    ".nii",
-    ".nrrd",
-    ".png",
-    ".svg",
-    ".tif",
-    ".tiff",
-    ".webp",
-)
-CURATE_ALLOWED_DEFAULT_ASSETS = {
-    Path("frontend/public/bits-and-flames-logo.png"),
-    Path("frontend/public/brand/bf-flame-mark.svg"),
-    Path("frontend/public/brand/flame-bit.png"),
-    Path("frontend/public/brand/logo-modern-light.png"),
-}
 SPEC = importlib.util.spec_from_file_location(
     "check_release_readiness",
     ROOT / "scripts/check_release_readiness.py",
@@ -66,19 +43,6 @@ def test_curate_local_artifact_paths_are_git_ignored() -> None:
             check=False,
         )
         assert result.returncode == 0, path
-
-
-def test_curate_packaged_defaults_include_only_brand_assets() -> None:
-    discovered = {
-        path.relative_to(CURATE_APP_ROOT)
-        for path in CURATE_APP_ROOT.rglob("*")
-        if path.is_file()
-        and "node_modules" not in path.parts
-        and "dist" not in path.parts
-        and path.name.lower().endswith(CURATE_PACKAGED_ASSET_EXTENSIONS)
-    }
-
-    assert discovered == CURATE_ALLOWED_DEFAULT_ASSETS
 
 
 def test_release_readiness_detects_blocked_package_paths(tmp_path: Path, monkeypatch) -> None:

@@ -8,7 +8,7 @@ Full generated backlog: **358** incomplete API entries.
 
 ## How To Use This Report
 
-- `fyron`, `core`, `fhir`, `dicom`, `imaging`, `survival`, `ml`, `plotting`, and `curate` are the first public-beta documentation surfaces. Treat the priority backlog as the milestone for first external users; the full backlog below remains useful for long-tail polishing.
+- `fyron`, `core`, `fhir`, `dicom`, `imaging`, `survival`, `ml`, and `plotting` are the first public-beta documentation surfaces. Treat the priority backlog as the milestone for first external users; the full backlog below remains useful for long-tail polishing.
 - Add a short first docstring paragraph, parameter descriptions, and return notes.
 - Public APIs are documented package exports and top-level workflow helpers; underscore-prefixed modules and helpers are internal and may change without compatibility guarantees.
 - Regenerate the docs with `uv run python scripts/build_docs.py`.

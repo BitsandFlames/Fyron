@@ -165,7 +165,7 @@ and saves a provenance manifest. Use only public Fyron APIs.
 - [SKILL.md](ai/fyron-skill/SKILL.md)
 - [AI Assistant Guide](agents.md)
 - [Modules Overview](modules/index.md)
-- [Fyron Curate](applications/curate.md)
+- [Curate](applications/curate.md)
 - [Unified CLI](modules/cli.md)
 - [Function Reference](function-reference.md)
 - [Using Fyron In Research](repository-trust.md)

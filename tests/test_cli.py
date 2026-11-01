@@ -19,10 +19,9 @@ def test_cli_help_commands(capsys) -> None:
     assert exc.value.code == 0
     help_text = capsys.readouterr().out
     assert "fhir-rest" in help_text
-    assert "curate" in help_text
     assert "dataset-curate-previews" in help_text
 
-    for command in ["fhir-rest", "fhir-build-bundle", "dicom-download", "document-download", "curate", "dataset-curate-previews"]:
+    for command in ["fhir-rest", "fhir-build-bundle", "dicom-download", "document-download", "dataset-curate-previews"]:
         with pytest.raises(SystemExit) as exc:
             main([command, "--help"])
         assert exc.value.code == 0

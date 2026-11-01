@@ -152,7 +152,7 @@ Choose the workflow by user intent:
 | Model explainability, PDP, SHAP tables | `fyron.explainability` |
 | Clinical plots and paper figures | `fyron.plotting` |
 | Provenance manifests and file hashes | `fyron.audit`, `fyron audit-manifest` |
-| Curate local image cohorts | `fyron curate` with `fyron[curate]` |
+| Curate local image cohorts | [standalone Curate](https://github.com/BitsandFlames/Curate) |
 | LLM-assisted prompting over docs/tables | `fyron.llm` |
 
 ## Install Extras
@@ -172,7 +172,6 @@ uv add "fyron[ml,statistics,descriptive,validation,explainability]"
 uv add "fyron[survival,survival-ml]"
 uv add "fyron[dicom-seg,visualization,radiomics]"
 uv add "fyron[feature-selection]"
-uv add "fyron[curate]"
 ```
 
 Use `fyron[all]` for full local research workstations, tutorials, and feature exploration. For servers, CI jobs, and missing-dependency errors, prefer the targeted extra and tell the user the exact `uv add "fyron[extra]"` command.
@@ -347,7 +346,7 @@ fyron dicom-download --dicom-web-url "$DICOM_WEB_URL" --study-uid "$STUDY_UID" -
 fyron synthetic-dicom --volume volume.nii.gz --reference-dicom dicom/ --output-dir synthetic/
 fyron dicom-seg --mask mask.nii.gz --source-dicom dicom/ --segments segments.json --output mask.seg.dcm --validate
 fyron dataset-curate-previews --input-dir ct_exports/ --output-dir curate_previews/
-fyron curate
+# Start Curate separately: https://github.com/BitsandFlames/Curate
 fyron boa-extract --cohort-folder boa/ --output body_regions.csv --include-body-regions --include-total
 fyron boa-radiomics --cohort-folder boa/ --segmentation total --output radiomics.csv
 fyron imaging-qc --nifti image.nii.gz --mask mask.nii.gz --output qc.csv

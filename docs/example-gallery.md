@@ -40,7 +40,7 @@ The generated figure previews now live on the [Visual Figure Gallery](examples/v
 | Goal | Start here |
 | --- | --- |
 | Understand the whole study shape | [Clinical AI Study Workflow](clinical-ai-study-workflow.md) |
-| Prepare image folders for review | [Fyron Curate](applications/curate.md) |
+| Prepare image folders for review | [Curate](applications/curate.md) |
 | Compare module responsibilities | [Modules Overview](modules/index.md) |
 | Learn function arguments quickly | [Function Reference](function-reference.md) |
 | Prepare repository or manuscript trust material | [Using Fyron In Research](repository-trust.md) |

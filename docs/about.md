@@ -19,7 +19,7 @@ Whether Fyron helps you build your next study or simply gives you an idea, we ho
 | Access healthcare data | [FHIR REST and SQL](modules/fhir.md), [DICOM downloads](modules/dicom.md), [document downloads](modules/documents/downloader.md) |
 | Prepare a study cohort | [Cohort construction](modules/cohort.md), [phenotyping](modules/phenotyping.md), [preprocessing](modules/preprocessing.md) |
 | Work with images | [CT/MRI normalization and image I/O](modules/imaging.md), [Body and Organ Analysis](modules/boa.md), [dataset preparation](modules/datasets.md) |
-| Review and select images locally | [Fyron Curate](applications/curate.md) |
+| Review and select images locally | [Curate](applications/curate.md) |
 | Explore and evaluate results | [Descriptive analysis](modules/descriptive.md), [survival analysis](modules/survival.md), [machine learning](modules/ml.md), [validation](modules/validation.md) |
 | Communicate and document your work | [Plotting](modules/plotting.md), [reporting](modules/reporting.md), [provenance](modules/audit.md) |
 

@@ -26,7 +26,6 @@ def base():
     assert sitk.ReadImage(str(path)).GetSize() == (5, 4, 3)
     executable = Path(sys.executable).parent / ("fyron.exe" if os.name == "nt" else "fyron")
     subprocess.run([str(executable), "--help"], check=True, capture_output=True)
-    subprocess.run([str(executable), "curate", "--help"], check=True, capture_output=True)
     help_text = subprocess.run([str(executable), "document-download", "--help"],
                                check=True, capture_output=True, text=True).stdout
     assert all(flag in help_text for flag in ("--id-col", "--document-id", "--token-cache", "--flat-output"))
@@ -127,13 +126,6 @@ def audit():
     assert len(hash_file("hash.txt")) == 64
 
 
-def curate():
-    from fyron.curate import default_app_dir, build_compose_command
-    app = default_app_dir()
-    for relative in ("docker-compose.yml", "backend/package.json", "frontend/package.json"):
-        assert (app / relative).is_file(), relative
-    assert build_compose_command()[:2] == ["docker", "compose"]
-
 
 def s3():
     from botocore.stub import Stubber
@@ -204,7 +196,7 @@ CASES = {"base": base, "excel": excel, "survival": survival, "survival-ml": surv
          "ml": ml, "boruta": boruta, "statistics": statistics, "validation": validation,
          "explainability": explainability, "feature-selection": feature_selection,
          "descriptive": descriptive, "reporting": reporting, "audit": audit,
-         "curate": curate, "s3": s3, "visualization": visualization,
+         "s3": s3, "visualization": visualization,
          "radiomics": radiomics, "dicom-seg": dicom_seg}
 
 

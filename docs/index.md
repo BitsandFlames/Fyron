@@ -62,7 +62,7 @@ Fyron supports research; it does not replace clinical validation, privacy review
 
 ## Citation
 
-Please cite the version used in your work, including studies using **Fyron Curate**.
+Please cite the Fyron version used in your work. Standalone [Curate has its own citation](https://github.com/BitsandFlames/Curate/blob/main/CITATION.cff); earlier bundled versions use the corresponding Fyron citation.
 
 <div class="bf-citation">
 <p>René Hosch, Katarzyna Borys, Sina Warmer, Jannis Straus, Kamyar Hartmann, and Justin Woolley (2026). <em>Fyron: An Open Research Companion for Healthcare Interoperability, Data Science and AI.</em> Version 0.3.20b4 [Computer software].</p>

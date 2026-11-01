@@ -247,7 +247,7 @@ Failed cases remain in the summary table with `status="error"` and an explanator
 
 ## Curate Preview Preparation
 
-Use `prepare_curate_image_previews` when a folder of CT/MRI volumes should be turned into PNGs that can be dropped directly into Fyron Curate. 3-D volumes produce middle axial, coronal, and sagittal slices. 2-D images such as X-rays or topograms produce one preview.
+Use `prepare_curate_image_previews` when a folder of CT/MRI volumes should be turned into PNGs that can be dropped directly into Curate. 3-D volumes produce middle axial, coronal, and sagittal slices. 2-D images such as X-rays or topograms produce one preview.
 
 ```python
 from fyron.visualization import prepare_curate_image_previews
@@ -272,7 +272,7 @@ fyron dataset-curate-previews --input-dir /data/ct_exports --output-dir curate_p
 After the previews are written, launch the review app and drop the generated folder into the **Add cohort** dialog:
 
 ```bash
-fyron curate
+# Start Curate separately: https://github.com/BitsandFlames/Curate
 ```
 
 The generated `manifest.csv` is for traceability; Curate indexes the PNG files themselves and preserves their relative folder paths.
