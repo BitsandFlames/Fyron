@@ -2,7 +2,7 @@
 
 **Make your methods understandable, your results traceable, and your data protected.**
 
-Fyron supports research workflows, including image review with Curate. This page explains what to record for a study, how to cite the software, and what to consider before sharing results or asking for help.
+Fyron supports research workflows, including cohort preparation and imaging analysis. This page explains what to record for a study, how to cite the software, and what to consider before sharing results or asking for help.
 
 ## Record the version and methods
 
@@ -18,23 +18,22 @@ Fyron is in public beta. Pin the version used for your study and keep the analys
 
 Use [cohort flow tracking](modules/flow.md) to document selection steps and [audit manifests](modules/audit.md) to record provenance. Review manifests and reports before sharing them: paths, identifiers, and metadata can reveal sensitive information. These tools do not automatically anonymize an artifact.
 
-## Cite Fyron, including Curate
+## Cite Fyron
 
-If Fyron contributes to a paper, thesis, or dataset, please cite the version you used. Earlier Curate versions bundled with Fyron use the same software citation. In Methods, describe its role and the criteria used to accept or reject images.
+If Fyron contributes to a paper, thesis, or dataset, please cite the version you used. In Methods, describe its role and the criteria used to accept or reject images.
 
 > René Hosch, Katarzyna Borys, Sina Warmer, Jannis Straus, Kamyar Hartmann, and Justin Woolley. *Fyron: An Open Research Companion for Healthcare Interoperability, Data Science and AI.* Bits & Flames. Include the version and release year used in your study.
 
-[Copy the current citation and BibTeX](index.md#citation) · [Download citation metadata](https://github.com/BitsandFlames/Fyron/blob/main/CITATION.cff) · [Curate citation guidance](applications/curate.md#citation)
+[Copy the current citation and BibTeX](index.md#citation) · [Download citation metadata](https://github.com/BitsandFlames/Fyron/blob/main/CITATION.cff)
 
 If your release has a verified Zenodo record, use its version-specific DOI. A Git tag or citation file alone does not create a DOI.
 
-Standalone [Curate](https://github.com/BitsandFlames/Curate) now has its own [citation metadata](https://github.com/BitsandFlames/Curate/blob/main/CITATION.cff). The bundled-version guidance above applies to earlier Fyron distributions.
 
 ## Know where your data goes
 
 Local file and analysis workflows run on your machine. Configured clients can send requests to services such as FHIR, DICOMweb, S3, Teable, and LLM providers. Before using them with study data, check the destination, credentials, data handling, and your institution's requirements.
 
-Curate is a local image review app. It supports dataset selection, but it is not a regulated clinical audit system. Fyron is not a medical device or a substitute for study approvals, privacy controls, or clinical validation.
+Fyron is not a medical device or a substitute for study approvals, privacy controls, or clinical validation.
 
 Keep token caches and credentials outside shared datasets. Treat downloaded documents, clinical tables, images, and review exports as sensitive until reviewed under your study's data policy.
 
@@ -54,7 +53,7 @@ Passing software tests does not establish clinical validity or guarantee that a 
 
 ## License
 
-Current Fyron source, Curate's frontend and backend, and associated project documentation are available under **Creative Commons Attribution-NonCommercial 4.0 International (CC BY-NC 4.0)**. You may share and adapt the material for noncommercial purposes with appropriate credit, a license link, and an indication of changes. Noncommercial is not the same as research-only: research can be commercial, and noncommercial use can extend beyond research.
+Current Fyron source and associated project documentation are available under **Creative Commons Attribution-NonCommercial 4.0 International (CC BY-NC 4.0)**. You may share and adapt the material for noncommercial purposes with appropriate credit, a license link, and an indication of changes. Noncommercial is not the same as research-only: research can be commercial, and noncommercial use can extend beyond research.
 
 Because this license restricts commercial use, we describe the current source as **source available**, not OSI open source. For commercial permission beyond existing grants, contact [Bits & Flames](mailto:hello@bitsandflames.ai). Creative Commons recommends software-specific licenses for software; this project has chosen CC BY-NC 4.0, whose legal text governs this grant.
 

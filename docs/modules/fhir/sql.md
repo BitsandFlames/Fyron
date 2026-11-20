@@ -1,5 +1,64 @@
 # FHIR SQL
 
+**Version scope:** Fyron 0.3.20b5 (Beta 5). Reporting, timeout, validation and naming additions described here require Beta 5 or newer.
+
+## Find the right operation
+
+Start with ordinary bound SQL returning a DataFrame. Use that table's keys for dependent queries, then merge or summarize explicitly in pandas. SQL schemas are site-specific; this page's runnable query examples use invented rows.
+
+**[All parameters, defaults and accepted options](sql/parameters.md)** · [Connection setup](../../authentication/sql.md) · [Cohort walkthrough](../../onboarding/sql.md)
+
+| What you want | Use | Important controls |
+| --- | --- | --- |
+| One SQL result as a table | `query_df` / `query_to_dataframe` | `params`, `rename` |
+| Matching rows for a cohort | `query_df_for_keys` | ordered `key_columns`, `result_key_columns`, `chunk_size` |
+| Preserve patient/encounter pairs | `query_df_for_keys` with tuple `IN` | one `{cohort_keys}` block; paired output mapping |
+| Consume result chunks | `query_df_stream` | `chunksize`, statement/lock time limits |
+| Split a time/grid extraction | `query_df_partitioned` | `frequency`, `window_days`, `param_grid`, error policy |
+| Write resumable CSV parts | `export_query_partitioned` | verification records, filename templates, explicit overwrite |
+| Maintain an existing list-based query | `query_df_from` | `column_map`, binding style and parameter budget |
+
+### Example: first query, then dependent rows
+
+Load your approved database `.env` explicitly. HTTP `Auth` is not used for PostgreSQL. This example needs a connection but does not create tables or read institutional data.
+
+```python
+from dotenv import load_dotenv
+from fyron import FHIRSQLClient
+from fyron.console import configure_logging
+
+configure_logging("INFO", color=True)
+load_dotenv(".env", override=False)
+with FHIRSQLClient(
+    statement_timeout=120, lock_timeout=10, log_queries=True,
+) as client:
+    cohort = client.query_df(
+        "SELECT patient_id FROM (VALUES ('001'), ('002'), ('003')) AS p(patient_id)"
+    )
+    result = client.query_df_for_keys(
+        df=cohort,
+        sql="""
+        WITH measurements(patient_id, code, value) AS (
+            VALUES ('001', 'demo', 10), ('001', 'demo', 12), ('002', 'demo', 20)
+        )
+        SELECT patient_id, value FROM measurements
+        WHERE patient_id IN ({cohort_keys}) AND code = %(code)s
+        """,
+        key_columns=["patient_id"], params={"code": "demo"},
+        result_key_columns=["patient_id"], chunk_size=1000,
+        parallel=False, return_report=True,
+    )
+
+measurements = result["data"]                  # Three rows, retaining repeated measurements
+unmatched = result["report"]["unmatched_keys"]  # Synthetic patient 003
+summary = result["report"]["summary"]
+```
+
+**What changes when you change an option?** `key_columns` binds complete input keys; `result_key_columns` enables coverage checks. `chunk_size` changes batch size, not clinical selection. `parallel=True` uses independent worker connections. `return_report=True` is supported by `query_df_for_keys`; it is not a general option on every SQL method.
+
+For paired keys, use `(patient_id, encounter_id) IN ({cohort_keys})` with both columns in the same order. Legacy `column_map` lists are independent and do not preserve pairs. Time limits, file verification and explicit merges protect the workflow but do not choose clinical eligibility or provide a common transaction snapshot across workers.
+
+
 For site-specific access setup, see [SQL authentication and connections](../../authentication/sql.md). Choose the method and permissions approved by your administrator.
 
 Development update: see [Safe Network Diagnostics](../../diagnostics.md) for logging,
@@ -272,3 +331,87 @@ Filter clinically relevant rows in SQL whenever possible. Partitioning makes ext
 - [FHIR](../../fhir/index.html) for the overview.
 - [FHIR REST](rest.md) for endpoint-driven queries and write-back.
 - [Cohort Tables](../../cohort/index.html) for joining extracted features to outcomes.
+
+## Query progress and helpful errors
+
+Enable Fyron's shared console logger once, then opt into SQL activity messages:
+
+```python
+from fyron import FHIRSQLClient
+from fyron.console import configure_logging
+from fyron.fhir.sql import SQLQueryError
+
+configure_logging("INFO", color=True)
+# Load your approved connection settings before creating the client.
+try:
+    with FHIRSQLClient(log_queries=True) as client:
+        frame = client.query_df("SELECT %(value)s::int AS value", params={"value": 1})
+except SQLQueryError as error:
+    # Fyron supplies controlled guidance, without remote database diagnostics.
+    print(str(error))
+```
+
+`log_queries=True` logs connection/query starts and finishes at INFO, elapsed
+seconds and returned row counts. Streaming adds chunk counts. It never prints
+SQL, parameter values, credentials, database names or returned records. Failed
+operations are logged at ERROR even when activity logging is disabled.
+
+Colors use the same console settings as FHIR REST: supported terminals receive
+colored levels; `NO_COLOR` disables ANSI output. Use
+`configure_logging("INFO", json=True)` for structured scheduler logs. No logger
+configuration or banner is applied automatically by the SQL client.
+
+Errors distinguish authentication, permissions, syntax, missing schema objects,
+cancelled/timed-out statements, connection failures, aborted transactions,
+transaction conflicts and rejected values when PostgreSQL supplies a recognized
+error code. Pandas-wrapped database errors retain this classification. Unknown
+failures receive general troubleshooting guidance; remote error text stays private.
+Connection failures without a server error code cannot reliably distinguish TLS,
+network and authentication causes. Check those settings with your administrator.
+
+Streaming results yielded before a failure are incomplete. A stream closed early
+is logged as incomplete rather than successful. Batch failures raise without a
+successful partial extraction. Fyron does not automatically retry queries or roll
+back transactions: an aborted transaction requires an explicit rollback on the
+owned connection or a new client before retrying. Do not retry writes blindly.
+
+## Verified exports and database time limits
+
+`export_query_partitioned` skips an existing partition only when its completion
+record matches the SQL, bound parameters, partition metadata, selected columns
+and rename mapping, and its file digest still matches. A nonempty CSV alone is
+not proof of completion. The record stores fingerprints and file checksums,
+not SQL or bound values. These records describe a previous extraction; they do
+not prove that a live database has remained unchanged since that extraction.
+
+An unverified or changed partition is preserved and raises an error. Use
+`overwrite=True` for intentional replacement. The existing explicit
+`skip_existing=False` behavior also permits replacement. Set
+`write_completion_record=False` to omit new completion JSON, accepting that new
+outputs cannot be verified for later skips. Interrupted partitions are staged
+beside their destination and never replace an earlier file. Partition filename
+collisions are rejected before querying.
+
+```python
+from fyron import FHIRSQLClient
+from fyron.console import configure_logging
+
+configure_logging("INFO", color=True)
+with FHIRSQLClient(
+    statement_timeout=120,  # Seconds per statement; None retains server settings
+    lock_timeout=10,       # Seconds waiting for locks
+    log_queries=True,
+) as client:
+    table = client.query_df("SELECT %(value)s::int AS value", params={"value": 1})
+```
+
+Both limits apply to newly owned parent and worker connections. A cancelled
+statement can leave its transaction aborted; open a new client or explicitly
+roll back your connection before retrying. Fyron does not retry SQL or reconnect
+and replay it automatically. DataFrame chunking is not a guarantee of bounded
+server/client memory or a shared snapshot across worker connections.
+
+Combined exports also use verified records and preserve CSV identifier text,
+including leading zeros and literal `NA` values. If `continue_on_error=True`, a
+combined file can contain only the completed partitions; inspect the returned
+manifest for errors before using it as a complete extract.

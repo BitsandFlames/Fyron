@@ -49,7 +49,7 @@ Download DICOM studies/series via DICOMweb and optionally convert to NIfTI.
 **Import path:** `fyron.dicom.client.DICOMDownloader`
 
 ```python
-DICOMDownloader(self, auth: Optional[Union[Auth, requests.Session]] = None, dicom_web_url: Optional[str] = None, dicom_user: Optional[str] = None, dicom_password: Optional[str] = None, basic_auth: Optional[Tuple[str, str]] = None, output_format: str = 'nifti', use_compression: bool = False, num_processes: int = 1, log_downloads: bool = False, save_reference_dicom: bool = False, reference_dicom_name: str = 'reference.dcm', *, worker_auth_timeout: float = 120)
+DICOMDownloader(self, auth: Optional[Union[Auth, requests.Session]] = None, dicom_web_url: Optional[str] = None, dicom_user: Optional[str] = None, dicom_password: Optional[str] = None, basic_auth: Optional[Tuple[str, str]] = None, output_format: str = 'nifti', use_compression: bool = False, num_processes: int = 1, log_downloads: bool = False, save_reference_dicom: bool = False, reference_dicom_name: str = 'reference.dcm', *, worker_auth_timeout: float = 120, append_study_hash: bool = True, write_completion_record: bool = True, request_timeout: Optional[float] = None, parallel_job_timeout: Optional[float] = None, retries: Optional[Retry] = None)
 ```
 
 ### Parameters
@@ -68,6 +68,11 @@ DICOMDownloader(self, auth: Optional[Union[Auth, requests.Session]] = None, dico
 | `save_reference_dicom` | no | `bool` | `False` | When writing NIfTI output, keep one original DICOM slice beside the NIfTI as lightweight metadata/provenance. |
 | `reference_dicom_name` | no | `str` | `'reference.dcm'` | File name for the retained metadata DICOM. |
 | `worker_auth_timeout` | no | `float` | `120` | Positive worker token-wait timeout in seconds (default 120). |
+| `append_study_hash` | no | `bool` | `True` | Append a hash to custom full-study folder labels (default True). False requires exact safe labels unique to each study. |
+| `write_completion_record` | no | `bool` | `True` | Write per-series completion JSON for verified skips (default True). False preserves existing-file protection without writing new records. |
+| `request_timeout` | no | `Optional[float]` | `None` | Optional positive per-request timeout in seconds; None preserves unbounded requests. |
+| `parallel_job_timeout` | no | `Optional[float]` | `None` | Optional positive execution deadline for parallel tasks, excluding queue time. |
+| `retries` | no | `Optional[Retry]` | `None` | Optional urllib3 Retry configuration for transient GET failures. |
 
 ### Returns
 
@@ -152,7 +157,7 @@ Download all series in a study under one study folder.
 **Import path:** `fyron.dicom.client.DICOMDownloader.download_study`
 
 ```python
-DICOMDownloader.download_study(self, study_uid: str, output_dir: Union[str, pathlib.Path], skip_existing: bool = True, write_manifest: bool = True, study_layout: Literal['hierarchical', 'flat'] = 'hierarchical', study_folder_name: Optional[object] = None, save_study_manifest: Optional[bool] = None) -> List[DicomResult]
+DICOMDownloader.download_study(self, study_uid: str, output_dir: Union[str, pathlib.Path], skip_existing: bool = True, write_manifest: bool = True, study_layout: Literal['hierarchical', 'flat'] = 'hierarchical', study_folder_name: Optional[object] = None, save_study_manifest: Optional[bool] = None, *, append_study_hash: Optional[bool] = None) -> List[DicomResult]
 ```
 
 #### Parameters
@@ -164,8 +169,9 @@ DICOMDownloader.download_study(self, study_uid: str, output_dir: Union[str, path
 | `skip_existing` | no | `bool` | `True` | If True, skip series whose output already exists. |
 | `write_manifest` | no | `bool` | `True` | Write ``study_manifest.json`` after a successful full-study download. |
 | `study_layout` | no | `Literal['hierarchical', 'flat']` | `'hierarchical'` | ``"hierarchical"`` (default): ``{study_dir}/{series_uid}/`` holds that series (DICOM slices or one ``{series_uid}.nii.gz``). ``"flat"``: all DICOM files or all per-series NIfTI volumes live directly under ``study_dir`` (DICOM filenames are ``{SOPInstanceUID}.dcm``; NIfTI files are ``{series_uid}.nii.gz``). |
-| `study_folder_name` | no | `Optional[object]` | `None` | Optional readable prefix for the study directory. The sanitized label is followed by ``__{download_id(study_uid)}``, so different studies never share a directory merely because their patient label matches. Existing label-only directories are not reused or moved. |
+| `study_folder_name` | no | `Optional[object]` | `None` | Optional label for the study directory. By default, the sanitized label is followed by ``__{download_id(study_uid)}``, so different studies never share a directory merely because their patient label matches. With append_study_hash=False the label is used exactly as supplied. Existing label-only directories are not reused or moved. |
 | `save_study_manifest` | no | `Optional[bool]` | `None` | If not ``None``, overrides ``write_manifest`` for whether ``study_manifest.json`` is written (use ``False`` to skip the manifest without changing ``write_manifest``). |
+| `append_study_hash` | no | `Optional[bool]` | `None` | Override the constructor setting for this call. False uses the exact study_folder_name and rejects missing, unsafe or conflicting labels. |
 
 #### Returns
 
@@ -180,7 +186,7 @@ Download studies/series defined by a DataFrame.
 **Import path:** `fyron.dicom.client.DICOMDownloader.download_from_dataframe`
 
 ```python
-DICOMDownloader.download_from_dataframe(self, df: pd.DataFrame, output_dir: Union[str, pathlib.Path], study_uid_col: str = 'study_instance_uid', series_uid_col: str = 'series_instance_uid', download_full_study: bool = False, skip_existing: bool = True, write_manifest: bool = True, study_layout: Literal['hierarchical', 'flat'] = 'hierarchical', study_folder_name_col: Optional[str] = None, save_study_manifest: Optional[bool] = None, results_csv: Optional[Union[str, pathlib.Path]] = None, save_reference_dicom: Optional[bool] = None, reference_dicom_name: Optional[str] = None, keep_reference_dicom: Optional[bool] = None) -> pd.DataFrame
+DICOMDownloader.download_from_dataframe(self, df: pd.DataFrame, output_dir: Union[str, pathlib.Path], study_uid_col: str = 'study_instance_uid', series_uid_col: str = 'series_instance_uid', download_full_study: bool = False, skip_existing: bool = True, write_manifest: bool = True, study_layout: Literal['hierarchical', 'flat'] = 'hierarchical', study_folder_name_col: Optional[str] = None, save_study_manifest: Optional[bool] = None, results_csv: Optional[Union[str, pathlib.Path]] = None, save_reference_dicom: Optional[bool] = None, reference_dicom_name: Optional[str] = None, keep_reference_dicom: Optional[bool] = None, *, append_study_hash: Optional[bool] = None, return_report: bool = False, show_progress: bool = True) -> Union[pd.DataFrame, Dict[str, object]]
 ```
 
 #### Parameters
@@ -201,6 +207,9 @@ DICOMDownloader.download_from_dataframe(self, df: pd.DataFrame, output_dir: Unio
 | `save_reference_dicom` | no | `Optional[bool]` | `None` | One-call override for the constructor setting. When True and ``output_format="nifti"``, retain one source DICOM slice beside each NIfTI output. |
 | `reference_dicom_name` | no | `Optional[str]` | `None` | One-call override for the retained metadata DICOM file name. |
 | `keep_reference_dicom` | no | `Optional[bool]` | `None` | Deprecated alias for ``save_reference_dicom`` kept for older scripts. |
+| `append_study_hash` | no | `Optional[bool]` | `None` | Override the constructor setting for custom full-study folders. False uses exact safe labels and rejects collisions before downloads. |
+| `return_report` | no | `bool` | `False` | Return data plus per-task rows and summary tables instead of only data. |
+| `show_progress` | no | `bool` | `True` | Display task progress; disable for quiet or JSON-log workflows. |
 
 #### Returns
 
@@ -215,7 +224,7 @@ Short alias for :meth:`download_from_dataframe`.
 **Import path:** `fyron.dicom.client.DICOMDownloader.download_from_df`
 
 ```python
-DICOMDownloader.download_from_df(self, df: pd.DataFrame, output_dir: Union[str, pathlib.Path], study_uid_col: str = 'study_instance_uid', series_uid_col: str = 'series_instance_uid', download_full_study: bool = False, skip_existing: bool = True, write_manifest: bool = True, study_layout: Literal['hierarchical', 'flat'] = 'hierarchical', study_folder_name_col: Optional[str] = None, save_study_manifest: Optional[bool] = None, results_csv: Optional[Union[str, pathlib.Path]] = None, save_reference_dicom: Optional[bool] = None, reference_dicom_name: Optional[str] = None, keep_reference_dicom: Optional[bool] = None) -> pd.DataFrame
+DICOMDownloader.download_from_df(self, df: pd.DataFrame, output_dir: Union[str, pathlib.Path], study_uid_col: str = 'study_instance_uid', series_uid_col: str = 'series_instance_uid', download_full_study: bool = False, skip_existing: bool = True, write_manifest: bool = True, study_layout: Literal['hierarchical', 'flat'] = 'hierarchical', study_folder_name_col: Optional[str] = None, save_study_manifest: Optional[bool] = None, results_csv: Optional[Union[str, pathlib.Path]] = None, save_reference_dicom: Optional[bool] = None, reference_dicom_name: Optional[str] = None, keep_reference_dicom: Optional[bool] = None, *, append_study_hash: Optional[bool] = None, return_report: bool = False, show_progress: bool = True) -> Union[pd.DataFrame, Dict[str, object]]
 ```
 
 #### Parameters
@@ -236,6 +245,9 @@ DICOMDownloader.download_from_df(self, df: pd.DataFrame, output_dir: Union[str, 
 | `save_reference_dicom` | no | `Optional[bool]` | `None` | One-call override for retaining a source DICOM beside NIfTI outputs. |
 | `reference_dicom_name` | no | `Optional[str]` | `None` | One-call override for the retained metadata DICOM file name. |
 | `keep_reference_dicom` | no | `Optional[bool]` | `None` | Deprecated alias for ``save_reference_dicom``. |
+| `append_study_hash` | no | `Optional[bool]` | `None` | Override the constructor setting for custom full-study folders. False uses exact safe labels and rejects collisions before downloads. |
+| `return_report` | no | `bool` | `False` | Return data plus per-task rows and summary tables instead of only data. |
+| `show_progress` | no | `bool` | `True` | Display task progress; disable for quiet or JSON-log workflows. |
 
 #### Returns
 

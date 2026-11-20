@@ -150,3 +150,19 @@ def test_distinct_ids_cannot_overwrite_each_other_after_extension_resolution(tmp
     assert results.error.isna().sum() == 1
     assert results.error.notna().sum() == 1
     assert (tmp_path/'report.pdf').read_bytes() == PDF
+
+
+@pytest.mark.parametrize('flat', [False, True])
+def test_custom_document_ids_without_json(tmp_path, flat):
+    loader, _ = client(tmp_path, flat_output=flat, write_completion_record=False)
+    result = loader.download_from_dataframe(
+        pd.DataFrame({'document_url': [URL], 'ACC_NR': ['00123']}), id_col='ACC_NR')
+    expected = tmp_path/'00123.pdf' if flat else tmp_path/'00123'/'00123.pdf'
+    assert result.error.isna().all()
+    assert Path(result.iloc[0]['path']) == expected
+    assert expected.read_bytes() == PDF
+    assert not list(tmp_path.rglob('*.json'))
+    again = loader.download_from_dataframe(
+        pd.DataFrame({'document_url': [URL], 'ACC_NR': ['00123']}), id_col='ACC_NR')
+    assert again.error.notna().all() and not again.skipped.any()
+    assert expected.read_bytes() == PDF

@@ -1,4 +1,4 @@
-"""Prepare Curate-ready PNG previews from CT/MRI volumes or 2-D images."""
+"""Prepare PNG previews from CT/MRI volumes or 2-D images for review."""
 
 from __future__ import annotations
 
@@ -48,7 +48,7 @@ def prepare_curate_image_previews(
     overwrite: bool = False,
     manifest_csv: StrPath | None = None,
 ) -> dict[str, Any]:
-    """Write Curate-ready PNG previews from medical image folders.
+    """Write PNG previews from medical image folders for review.
 
     3-D volumes produce three images: middle axial, coronal, and sagittal
     slices. 2-D images produce one image. The function walks nested folders by

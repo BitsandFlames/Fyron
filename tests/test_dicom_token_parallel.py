@@ -92,3 +92,45 @@ def test_token_coordinator_failure_redacts_credentials(provider, monkeypatch):
                 pool.map(reject_token, [None])
             assert "secret" not in str(error.value)
     assert not any(t.name.startswith("fyron-token-") for t in threading.enumerate())
+
+
+def test_parallel_full_study_exact_labels_without_json(provider, monkeypatch, tmp_path):
+    """Exercise new naming/record options through actual spawned download workers."""
+    import fyron.dicom.client as module
+    monkeypatch.setattr(module.mp, 'Pool', mp.get_context('spawn').Pool)
+    monkeypatch.setenv('FHIR_USER', 'user')
+    monkeypatch.setenv('FHIR_PASSWORD', 'pass')
+    with Auth.token_env(auth_url=provider['url'] + '/password-login') as auth:
+        with DICOMDownloader(auth=auth, dicom_web_url=provider['url'],
+                output_format='dicom', num_processes=2,
+                write_completion_record=False) as loader:
+            result = loader.download_from_dataframe(
+                pd.DataFrame({'study':['1.2.101','1.2.102'], 'ACC_NR':['001','002']}),
+                output_dir=tmp_path, study_uid_col='study', download_full_study=True,
+                study_folder_name_col='ACC_NR', append_study_hash=False,
+                study_layout='flat', save_study_manifest=False)
+    assert len(result) == 2 and result.error.isna().all()
+    assert {p.name for p in tmp_path.iterdir()} == {'001','002'}
+    assert len(list(tmp_path.rglob('*.dcm'))) == 2
+    assert not list(tmp_path.rglob('*.json'))
+
+
+def test_parallel_download_deadline_reports_incomplete(provider, monkeypatch, tmp_path):
+    """A worker execution deadline must raise, never look like an empty success."""
+    import fyron.dicom.client as module
+    from fyron.dicom.client import DicomDownloadError
+    monkeypatch.setattr(module.mp, 'Pool', mp.get_context('spawn').Pool)
+    monkeypatch.setenv('FHIR_USER', 'user')
+    monkeypatch.setenv('FHIR_PASSWORD', 'pass')
+    provider['download_delay'] = 0.5
+    with Auth.token_env(auth_url=provider['url'] + '/password-login') as auth:
+        with DICOMDownloader(auth=auth, dicom_web_url=provider['url'],output_format='dicom',
+                             num_processes=2,parallel_job_timeout=0.05) as loader:
+            with pytest.raises(DicomDownloadError,match='deadline'):
+                loader.download_from_dataframe(pd.DataFrame({'study_instance_uid':['1.2.501','1.2.502']}),
+                    output_dir=tmp_path/'out',download_full_study=True,show_progress=False,
+                    results_csv=tmp_path/'results.csv')
+    assert (tmp_path/'results.csv').is_file()
+    assert pd.read_csv(tmp_path/'results.csv').empty
+    assert not list(tmp_path.rglob('.fyron-stage-*'))
+    assert not list(tmp_path.rglob('.fyron-batch-*'))

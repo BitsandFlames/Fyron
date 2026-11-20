@@ -1,8 +1,8 @@
 # Skills
 
-Fyron can be used as an agent skill for Codex, Claude, Cursor, or any assistant that benefits from compact project knowledge. The skill teaches an assistant which Fyron module to use, how to install extras, how to start Curate, and where the safety boundaries are for clinical research data.
+Fyron can be used as an agent skill for Codex, Claude, Cursor, or any assistant that benefits from compact project knowledge. The skill teaches an assistant which Fyron module to use, how to install extras, and where the safety boundaries are for clinical research data.
 
-Use this when the assistant should help you create scripts, notebooks, figures, CLI recipes, Curate preview folders, or provenance manifests without guessing where Fyron functions live.
+Use this when the assistant should help you create scripts, notebooks, figures, CLI recipes, image preview folders, or provenance manifests without guessing where Fyron functions live.
 
 ## Download
 
@@ -24,7 +24,6 @@ fyron-skill/
     cli-recipes.md
     fhir-rest.md
     dicom-imaging.md
-    curate.md
     plotting.md
     safety.md
 ```
@@ -99,7 +98,7 @@ Use the Fyron skill to create a survival analysis workflow from my cohort CSV.
 or:
 
 ```text
-Use the Fyron skill to prepare a nested CT/MRI folder for Curate review.
+Use the Fyron skill to prepare a nested CT/MRI folder for image review.
 ```
 
 ## Manual Claude Setup
@@ -108,7 +107,7 @@ Claude can use the same files as project knowledge:
 
 1. Create a Claude Project for the study or package.
 2. Upload `fyron-claude-project-knowledge.md`, or upload `SKILL.md` and the `references/` folder.
-3. Add the public documentation URL: `https://fyron.bitsandflames.ai`.
+3. Add the public documentation URL: `https://docs.fyron.bitsandflames.ai`.
 4. Tell Claude to prefer public Fyron APIs and to keep clinical assumptions explicit.
 
 A compact Claude project instruction:
@@ -118,7 +117,7 @@ Use Fyron for clinical data science workflows. Prefer public APIs from fyron.fhi
 fyron.dicom, fyron.imaging, fyron.cohort, fyron.statistics, fyron.survival,
 fyron.ml, fyron.validation, fyron.plotting, fyron.visualization, and fyron.audit.
 Keep examples synthetic or de-identified. Do not send PHI to external LLMs.
-Use https://fyron.bitsandflames.ai as the source of truth.
+Use https://docs.fyron.bitsandflames.ai as the source of truth.
 ```
 
 ## Manual Cursor Setup
@@ -145,7 +144,6 @@ The skill is intentionally practical. A good assistant using it should:
 - choose a targeted install extra instead of always requiring `fyron[all]`,
 - validate column names, event coding, dates, array shapes, image geometry, and mask alignment early,
 - write inspectable outputs such as CSV, JSON, PNG/SVG, Markdown, notebooks, and provenance manifests,
-- use Curate for local image selection workflows,
 - keep private endpoints, credentials, accessions, MRNs, and patient-linked dates out of prompts and generated examples,
 - ask for human review when clinical or statistical assumptions would change the result.
 
@@ -165,7 +163,6 @@ and saves a provenance manifest. Use only public Fyron APIs.
 - [SKILL.md](ai/fyron-skill/SKILL.md)
 - [AI Assistant Guide](agents.md)
 - [Modules Overview](modules/index.md)
-- [Curate](applications/curate.md)
 - [Unified CLI](modules/cli.md)
 - [Function Reference](function-reference.md)
 - [Using Fyron In Research](repository-trust.md)

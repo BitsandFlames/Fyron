@@ -1,7 +1,7 @@
 [project]
 name = "fyron"
-version = "0.3.20b4"
-description = "Fyron is an source-available Python toolkit for interoperable healthcare data and AI workflows. It provides unified access to FHIR data via REST APIs and relational (SQL-backed) FHIR servers, integrates DICOM imaging sources, and enables semantic exploration of clinical narratives using modern language models."
+version = "0.3.20b5"
+description = "Fyron is a source-available Python toolkit for interoperable healthcare data and AI workflows. It provides unified access to FHIR data via REST APIs and relational (SQL-backed) FHIR servers, integrates DICOM imaging sources, and enables semantic exploration of clinical narratives using modern language models."
 readme = "README.md"
 requires-python = ">=3.11"
 license = "CC-BY-NC-4.0"
@@ -35,7 +35,7 @@ dependencies = [
 [project.urls]
 Homepage = "https://github.com/bitsandflames/fyron"
 Repository = "https://github.com/bitsandflames/fyron"
-Documentation = "https://fyron.bitsandflames.ai/"
+Documentation = "https://docs.fyron.bitsandflames.ai/"
 
 [project.optional-dependencies]
 excel = ["openpyxl>=3.1.0,<4.0.0"]

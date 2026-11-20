@@ -6,16 +6,19 @@ from .._diagnostics import event, safe_error, batch_report, error_event, complet
 
 import hashlib
 import logging
+import numbers
 import os
 import pathlib
 import re
 import shutil
 import tempfile
+import time
 import argparse
 import json
 import multiprocessing as mp
 import warnings
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
+from functools import wraps
 from typing import Dict, List, Optional, Tuple, Union, Sequence, Literal
 
 import pandas as pd
@@ -25,15 +28,18 @@ import SimpleITK as sitk
 from dicomweb_client.api import DICOMwebClient
 from requests.auth import HTTPBasicAuth
 from retrying import RetryError
+from urllib3.util.retry import Retry
 from tqdm import tqdm
 
 from ..fhir.auth import Auth, TokenAuth
-from ..fhir._workers import managed_pool, positive_timeout, worker_auth as current_worker_auth
+from ..fhir._workers import managed_pool, positive_timeout, monitored_results, worker_auth as current_worker_auth
 from ..fhir._client_credentials import _ClientCredentialsAuth
 from ..fhir._device_auth import _DeviceAuth
 from ..fhir._workers import PipeAuth as _WorkerAuth
 from ..console import info
 from .._completion import verified_files, publish_files
+from .._client_io import atomic_csv, task_row, extraction_report
+from .._http import DICOMSession, private_transport
 
 logger = logging.getLogger(__name__)
 
@@ -45,19 +51,37 @@ class DicomDownloadError(RuntimeError):
 def _filename_uid(value: object) -> str:
     uid = str(value)
     if len(uid) > 64 or not re.fullmatch(r"(?:0|[1-9][0-9]*)(?:\.(?:0|[1-9][0-9]*))*", uid):
-        raise DicomDownloadError("Invalid DICOM UID; output was not published.")
+        raise _DICOMValidationError("uid")
     return uid
 
 
 def _save_unique_instance(instance, directory: pathlib.Path, seen: set[str]) -> pathlib.Path:
     uid = _filename_uid(instance.SOPInstanceUID)
     if uid in seen:
-        raise DicomDownloadError("Duplicate SOP Instance UID; output was not published.")
+        raise _DICOMValidationError("duplicate")
     seen.add(uid)
     destination = directory / f"{uid}.dcm"
     with destination.open("xb") as stream:
         instance.save_as(stream)
     return destination
+
+
+_DICOM_VALIDATION_HINTS = {
+    "uid": "Invalid DICOM identifier; output was not published. Check source UID metadata.",
+    "duplicate": "Duplicate DICOM instance identifier; output was not published. Review source instances.",
+    "empty": "No usable DICOM instances were retrieved; check study/series selection and access permissions.",
+    "unreadable": "A retrieved DICOM instance cannot be read; study not published. Check source encoding and transfer syntax.",
+    "identity": "Retrieved DICOM identifiers are missing or conflict with the requested study/series; output not published.",
+}
+
+
+class _DICOMValidationError(DicomDownloadError):
+    def __init__(self, reason):
+        self.reason = reason
+        super().__init__(_DICOM_VALIDATION_HINTS[reason])
+
+    def __reduce__(self):
+        return type(self), (self.reason,)
 
 
 @dataclass
@@ -88,6 +112,32 @@ class DicomResult:
     format: str
     error: Optional[str] = None
     skipped: bool = False
+
+
+def _download_activity(function):
+    """Log safe lifecycle events for both direct and worker DICOM downloads."""
+    @wraps(function)
+    def wrapped(self, *args, **kwargs):
+        started = time.monotonic()
+        unit = "series" if function.__name__ == "download_series" else "study"
+        if self.log_downloads:
+            event(logger, "dicom", "started", unit=unit)
+        try:
+            result = function(self, *args, **kwargs)
+        except BaseException as exc:
+            if self.log_downloads:
+                event(logger, "dicom", "incomplete" if isinstance(exc, (KeyboardInterrupt, GeneratorExit)) else "failed",
+                      level=logging.ERROR, unit=unit, elapsed_s=time.monotonic() - started)
+            raise
+        if self.log_downloads:
+            items = [result] if isinstance(result, DicomResult) else result
+            failed = sum(item.error is not None for item in items)
+            skipped = sum(item.error is None and item.skipped for item in items)
+            event(logger, "dicom", "failed" if failed else "finished", unit=unit,
+                  elapsed_s=time.monotonic() - started, total=len(items),
+                  failed=failed, skipped=skipped, succeeded=len(items)-failed-skipped)
+        return result
+    return wrapped
 
 
 class DICOMDownloader:
@@ -124,8 +174,20 @@ class DICOMDownloader:
         as lightweight metadata/provenance.
     reference_dicom_name
         File name for the retained metadata DICOM.
+    request_timeout
+        Optional positive per-request timeout in seconds; None preserves unbounded requests.
+    parallel_job_timeout
+        Optional positive execution deadline for parallel tasks, excluding queue time.
+    retries
+        Optional urllib3 Retry configuration for transient GET failures.
     worker_auth_timeout
         Positive worker token-wait timeout in seconds (default 120).
+    append_study_hash
+        Append a hash to custom full-study folder labels (default True).
+        False requires exact safe labels unique to each study.
+    write_completion_record
+        Write per-series completion JSON for verified skips (default True).
+        False preserves existing-file protection without writing new records.
 
     Returns
     -------
@@ -149,6 +211,11 @@ class DICOMDownloader:
         reference_dicom_name: str = "reference.dcm",
         *,
         worker_auth_timeout: float = 120,
+        append_study_hash: bool = True,
+        write_completion_record: bool = True,
+        request_timeout: Optional[float] = None,
+        parallel_job_timeout: Optional[float] = None,
+        retries: Optional[Retry] = None,
     ) -> None:
         """Initialize a reusable DICOMweb downloader.
 
@@ -186,8 +253,20 @@ class DICOMDownloader:
         reference_dicom_name
             File name for the retained metadata DICOM. The value must be a file
             name, not a path; ``.dcm`` is appended when omitted.
+        request_timeout
+            Optional positive per-request timeout in seconds; None preserves unbounded requests.
+        parallel_job_timeout
+            Optional positive execution deadline for parallel tasks, excluding queue time.
+        retries
+            Optional urllib3 Retry configuration for transient GET failures.
         worker_auth_timeout
             Positive maximum worker wait for a token in seconds (default 120).
+        append_study_hash
+            Append a study hash to custom full-study folder labels by default.
+            False requires an exact safe label and rejects conflicting studies.
+        write_completion_record
+            Write per-series JSON records for verified skips. False preserves
+            existing-file protection but new outputs cannot be verified on rerun.
 
         Returns
         -------
@@ -202,6 +281,11 @@ class DICOMDownloader:
         self.output_format = self._normalize_format(output_format)
         self.num_processes = max(1, num_processes)
         self.worker_auth_timeout = positive_timeout(worker_auth_timeout, "worker_auth_timeout")
+        self.request_timeout = None if request_timeout is None else positive_timeout(request_timeout, "request_timeout")
+        self.parallel_job_timeout = None if parallel_job_timeout is None else positive_timeout(parallel_job_timeout, "parallel_job_timeout")
+        self._retries = retries
+        self.append_study_hash = append_study_hash
+        self.write_completion_record = write_completion_record
         self.log_downloads = log_downloads
         self.save_reference_dicom = bool(save_reference_dicom)
         self.reference_dicom_name = self._normalize_reference_dicom_name(reference_dicom_name)
@@ -238,9 +322,9 @@ class DICOMDownloader:
             self.session = requests.Session()
             self._close_session_on_exit = True
 
-        from .._http import guard_redirects
-        guard_redirects(self.session)
-        self.client = DICOMwebClient(url=self.dicom_web_url, session=self.session)
+        self.client = DICOMwebClient(url=self.dicom_web_url,
+                                    session=DICOMSession(self.session, self.request_timeout, retries))
+        self.client.set_http_retry_params(retry=False)  # One shared GET retry policy, not nested retries.
         if self.log_downloads:
             event(logger, "dicom", "activity", level=logging.DEBUG)
 
@@ -259,6 +343,8 @@ class DICOMDownloader:
 
     def _format_exception(self, exc: Exception) -> str:
         """Format an exception for logs, unwrapping RetryError and HTTP details when present."""
+        if isinstance(exc, _DICOMValidationError):
+            return _DICOM_VALIDATION_HINTS[exc.reason]
         return safe_error(exc)
 
     def _store_series_files(
@@ -275,13 +361,13 @@ class DICOMDownloader:
         target_dir.mkdir(parents=True, exist_ok=True)
         try:
             _filename_uid(series_uid)
-            with tempfile.TemporaryDirectory(prefix=".fyron-stage-", dir=target_dir) as stage_dir:
+            with tempfile.TemporaryDirectory(prefix=".fyron-stage-", dir=getattr(self, "_temporary_root", target_dir)) as stage_dir:
                 staging = pathlib.Path(stage_dir)
                 if self.output_format == "dicom":
                     for src in files:
                         shutil.copy2(src, staging / src.name)
                 else:
-                    with tempfile.TemporaryDirectory() as convdir:
+                    with tempfile.TemporaryDirectory(dir=getattr(self, "_temporary_root", None)) as convdir:
                         conv_path = pathlib.Path(convdir)
                         source_files = sorted(files)
                         if self.save_reference_dicom and source_files:
@@ -291,12 +377,13 @@ class DICOMDownloader:
                         series_reader = sitk.ImageSeriesReader()
                         gdcm_files = series_reader.GetGDCMSeriesFileNames(str(conv_path))
                         if not gdcm_files:
-                            raise DicomDownloadError("No DICOM files found for series.")
+                            raise _DICOMValidationError("empty")
                         series_reader.SetFileNames(gdcm_files)
                         image = series_reader.Execute()
                         out_path = staging / f"{series_uid}.nii.gz"
                         sitk.WriteImage(image, str(out_path), useCompression=self.use_compression)
-                publish_files(staging, target_dir, f"{self.output_format}:{series_uid}", overwrite=overwrite)
+                publish_files(staging, target_dir, f"{self.output_format}:{series_uid}",
+                              overwrite=overwrite, write_record=self.write_completion_record)
         except Exception as exc:
             error_event(logger, "dicom", exc)
             return DicomResult(
@@ -327,31 +414,29 @@ class DICOMDownloader:
         """Download a full study via WADO-RS iter_study, group by SeriesInstanceUID, store output."""
         layout = self._normalize_study_layout(study_layout)
         results: List[DicomResult] = []
-        with tempfile.TemporaryDirectory() as tmpdir:
+        with tempfile.TemporaryDirectory(dir=getattr(self, "_temporary_root", None)) as tmpdir:
             tmp_path = pathlib.Path(tmpdir)
             seen_sop: set[str] = set()
             for instance in self.client.iter_study(study_instance_uid=study_uid):
+                _validate_instance_identity(instance, study_uid)
                 _save_unique_instance(instance, tmp_path, seen_sop)
 
             all_files = sorted(tmp_path.glob("*.dcm"))
             if not all_files:
-                raise DicomDownloadError("No DICOM instances retrieved via iter_study.")
+                raise _DICOMValidationError("empty")
 
             by_series: Dict[str, List[pathlib.Path]] = {}
             for fp in all_files:
                 try:
                     ds = pydicom.dcmread(fp, stop_before_pixels=True)
-                except Exception as read_exc:
-                    event(logger, "dicom", "warning", level=logging.WARNING)
-                    continue
-                suid = getattr(ds, "SeriesInstanceUID", None)
-                if not suid:
-                    event(logger, "dicom", "warning", level=logging.WARNING)
-                    continue
+                except Exception:
+                    raise _DICOMValidationError("unreadable") from None
+                _validate_instance_identity(ds, study_uid)
+                suid = ds.SeriesInstanceUID
                 by_series.setdefault(str(suid), []).append(fp)
 
             if not by_series:
-                raise DicomDownloadError("No series could be identified from iter_study download.")
+                raise _DICOMValidationError("empty")
 
             for ser_uid in sorted(by_series.keys()):
                 series_files = by_series[ser_uid]
@@ -397,6 +482,7 @@ class DICOMDownloader:
         save_study_manifest: Optional[bool] = None,
         save_reference_dicom: Optional[bool] = None,
         reference_dicom_name: Optional[str] = None,
+        append_study_hash: Optional[bool] = None,
     ) -> List[DicomResult]:
         """Execute a single download task (series or study)."""
         previous_save_reference = self.save_reference_dicom
@@ -416,6 +502,7 @@ class DICOMDownloader:
                     study_layout=study_layout,
                     study_folder_name=study_folder_name,
                     save_study_manifest=save_study_manifest,
+                    append_study_hash=append_study_hash,
                 )
             return [
                 self.download_series(
@@ -462,6 +549,8 @@ class DICOMDownloader:
         key = study_uid if series_uid is None else f"{study_uid}_{series_uid}"
         return hashlib.sha256(key.encode()).hexdigest()
 
+    @private_transport
+    @_download_activity
     def download_series(
         self,
         study_uid: str,
@@ -499,6 +588,8 @@ class DICOMDownloader:
             skip_existing=skip_existing,
         )
 
+    @private_transport
+    @_download_activity
     def download_study(
         self,
         study_uid: str,
@@ -508,6 +599,8 @@ class DICOMDownloader:
         study_layout: Literal["hierarchical", "flat"] = "hierarchical",
         study_folder_name: Optional[object] = None,
         save_study_manifest: Optional[bool] = None,
+        *,
+        append_study_hash: Optional[bool] = None,
     ) -> List[DicomResult]:
         """Download all series in a study under one study folder.
 
@@ -531,10 +624,14 @@ class DICOMDownloader:
             ``study_dir`` (DICOM filenames are ``{SOPInstanceUID}.dcm``; NIfTI files are
             ``{series_uid}.nii.gz``).
         study_folder_name
-            Optional readable prefix for the study directory. The sanitized label
+            Optional label for the study directory. By default, the sanitized label
             is followed by ``__{download_id(study_uid)}``, so different studies
             never share a directory merely because their patient label matches.
+            With append_study_hash=False the label is used exactly as supplied.
             Existing label-only directories are not reused or moved.
+        append_study_hash
+            Override the constructor setting for this call. False uses the exact
+            study_folder_name and rejects missing, unsafe or conflicting labels.
         save_study_manifest
             If not ``None``, overrides ``write_manifest`` for whether ``study_manifest.json``
             is written (use ``False`` to skip the manifest without changing ``write_manifest``).
@@ -545,8 +642,12 @@ class DICOMDownloader:
             One result per downloaded or skipped series. A study-level failure is
             raised as ``DicomDownloadError``.
         """
-        study_id = self._study_output_dir_name(study_uid, study_folder_name)
+        append_hash = self.append_study_hash if append_study_hash is None else append_study_hash
+        _validate_input_uid(study_uid)
+        study_id = self._study_output_dir_name(study_uid, study_folder_name, append_hash)
         study_dir = pathlib.Path(output_dir) / study_id
+        if not append_hash:
+            _check_exact_study_directory(study_dir, study_uid)
         study_dir.mkdir(parents=True, exist_ok=True)
         layout = self._normalize_study_layout(study_layout)
         try:
@@ -558,6 +659,8 @@ class DICOMDownloader:
             )
         except Exception as exc:
             error_event(logger, "dicom", exc)
+            if isinstance(exc, _DICOMValidationError):
+                raise exc from None
             raise DicomDownloadError(
                 f"Failed to download study: {self._format_exception(exc)}"
             ) from None
@@ -583,7 +686,11 @@ class DICOMDownloader:
         save_reference_dicom: Optional[bool] = None,
         reference_dicom_name: Optional[str] = None,
         keep_reference_dicom: Optional[bool] = None,
-    ) -> pd.DataFrame:
+        *,
+        append_study_hash: Optional[bool] = None,
+        return_report: bool = False,
+        show_progress: bool = True,
+    ) -> Union[pd.DataFrame, Dict[str, object]]:
         """Download studies/series defined by a DataFrame.
 
         When ``download_full_study`` is True, ``study_layout`` controls folder layout (see
@@ -625,8 +732,16 @@ class DICOMDownloader:
             NIfTI output.
         reference_dicom_name
             One-call override for the retained metadata DICOM file name.
+        append_study_hash
+            Override the constructor setting for custom full-study folders.
+            False uses exact safe labels and rejects collisions before downloads.
         keep_reference_dicom
             Deprecated alias for ``save_reference_dicom`` kept for older scripts.
+
+        return_report
+            Return data plus per-task rows and summary tables instead of only data.
+        show_progress
+            Display task progress; disable for quiet or JSON-log workflows.
 
         Returns
         -------
@@ -650,13 +765,18 @@ class DICOMDownloader:
         if study_folder_name_col is not None and study_folder_name_col not in df.columns:
             raise ValueError(f"Missing study folder name column '{study_folder_name_col}'.")
 
+        append_hash = self.append_study_hash if append_study_hash is None else append_study_hash
         tasks = _build_tasks(
             df=df,
             study_uid_col=study_uid_col,
             series_uid_col=series_uid_col,
             download_full_study=download_full_study,
             study_folder_name_col=study_folder_name_col,
+            append_study_hash=append_hash,
         )
+        if download_full_study and not append_hash:
+            for uid, _, _, label in tasks:
+                _check_exact_study_directory(output_dir / self._study_output_dir_name(uid, label, False), uid)
         results: List[DicomResult] = []
         if self.num_processes > 1 and not (
             self.dicom_user or self.dicom_password
@@ -666,55 +786,74 @@ class DICOMDownloader:
                 event(logger, "dicom", "activity", level=logging.DEBUG)
             self.num_processes = 1
 
-        if self.num_processes > 1:
-            coordinated_auth = self.session.auth if isinstance(self.session.auth, (_DeviceAuth, TokenAuth, _ClientCredentialsAuth)) else None
-            with managed_pool(coordinated_auth, self.num_processes, self.worker_auth_timeout) as (pool, _):
-                for result in tqdm(
-                    pool.imap_unordered(
-                        _worker_download_task,
-                        [
-                            (
-                                task,
-                                self.dicom_web_url,
-                                self.output_format,
-                                self.use_compression,
-                                skip_existing,
-                                write_manifest,
-                                output_dir,
-                                self.dicom_user,
-                                self.dicom_password,
-                                study_layout,
-                                save_study_manifest,
-                                resolved_save_reference,
-                                resolved_reference_name,
-                            )
-                            for task in tasks
-                        ],
-                    ),
-                    total=len(tasks),
-                    desc="Downloading DICOM",
-                ):
-                    results.extend(result)
-                    completed_task(result)
-        else:
-            for task in tqdm(tasks, total=len(tasks), desc="Downloading DICOM"):
-                task_results = self._run_task(
-                        task=task,
-                        output_dir=output_dir,
-                        skip_existing=skip_existing,
-                        write_manifest=write_manifest,
-                        study_layout=study_layout,
-                        save_study_manifest=save_study_manifest,
-                        save_reference_dicom=resolved_save_reference,
-                        reference_dicom_name=resolved_reference_name,
-                    )
-                results.extend(task_results)
-                completed_task(task_results)
-        df_out = pd.DataFrame([r.__dict__ for r in results])
-        if results_csv:
-            pathlib.Path(results_csv).parent.mkdir(parents=True, exist_ok=True)
-            df_out.to_csv(results_csv, index=False)
-        return df_out
+        ordered_results = {}
+        report_rows = []
+        progress = tqdm(total=len(tasks), desc="DICOM", unit="task", disable=not show_progress)
+        def record(value):
+            number, items, elapsed = value
+            ordered_results[number] = items
+            report_rows.append(task_row(number, items, elapsed))
+            completed_task(items)
+            progress.update(1)
+            if self.log_downloads:
+                event(logger, "dicom", "failed" if any(item.error for item in items) else "finished",
+                      job=number, rows=len(items), elapsed_s=elapsed)
+        def result_frame():
+            items = [item.__dict__ for number in sorted(ordered_results) for item in ordered_results[number]]
+            return pd.DataFrame(items, columns=[field.name for field in fields(DicomResult)])
+        interrupted = False
+        worker_staging = None
+        try:
+            if self.num_processes > 1 and tasks:
+                worker_staging = tempfile.TemporaryDirectory(prefix=".fyron-batch-", dir=output_dir)
+                coordinated_auth = self.session.auth if isinstance(self.session.auth, (_DeviceAuth, TokenAuth, _ClientCredentialsAuth)) else None
+                worker_args = [
+                    (number, (task, self.dicom_web_url, self.output_format, self.use_compression,
+                     skip_existing, write_manifest, output_dir, self.dicom_user, self.dicom_password,
+                     study_layout, save_study_manifest, resolved_save_reference, resolved_reference_name,
+                     None, append_hash, self.write_completion_record, self.request_timeout, self._retries,
+                     str(pathlib.Path(worker_staging.name) / str(number))))
+                    for number, task in enumerate(tasks)]
+                with managed_pool(coordinated_auth, self.num_processes, self.worker_auth_timeout) as (pool, events):
+                    for value in monitored_results(pool, events, _indexed_worker_download_task,
+                                                   worker_args, self.parallel_job_timeout, operation="dicom"):
+                        record(value)
+            else:
+                for number, task in enumerate(tasks):
+                    started = time.monotonic()
+                    if self.log_downloads:
+                        event(logger, "dicom", "started", job=number)
+                    items = self._run_task(task=task, output_dir=output_dir, skip_existing=skip_existing,
+                        write_manifest=write_manifest, study_layout=study_layout,
+                        save_study_manifest=save_study_manifest, save_reference_dicom=resolved_save_reference,
+                        reference_dicom_name=resolved_reference_name, append_study_hash=append_hash)
+                    record((number, items, time.monotonic() - started))
+        except BaseException:
+            interrupted = True
+            event(logger, "dicom", "incomplete", completed=len(ordered_results),
+                  unfinished=len(tasks) - len(ordered_results))
+            raise
+        finally:
+            if worker_staging is not None:
+                worker_staging.cleanup()
+            progress.close()
+            if results_csv:
+                try:
+                    out = result_frame()
+                    forbidden = list(out["path"])
+                    report_path = pathlib.Path(results_csv).resolve()
+                    for folder in set(forbidden):
+                        root = pathlib.Path(folder).resolve()
+                        if report_path.is_relative_to(root) and report_path.suffix.lower() != ".csv":
+                            forbidden.append(report_path)
+                    atomic_csv(out, results_csv, forbidden=forbidden)
+                except Exception:
+                    if not interrupted:
+                        raise
+                    event(logger, "dicom", "warning")
+        out = result_frame()
+        report = extraction_report(report_rows, len(tasks), len(df))
+        return {"data": out, "report": report} if return_report else out
 
     def download_from_df(
         self,
@@ -732,7 +871,11 @@ class DICOMDownloader:
         save_reference_dicom: Optional[bool] = None,
         reference_dicom_name: Optional[str] = None,
         keep_reference_dicom: Optional[bool] = None,
-    ) -> pd.DataFrame:
+        *,
+        append_study_hash: Optional[bool] = None,
+        return_report: bool = False,
+        show_progress: bool = True,
+    ) -> Union[pd.DataFrame, Dict[str, object]]:
         """Short alias for :meth:`download_from_dataframe`.
 
         Parameters
@@ -763,8 +906,16 @@ class DICOMDownloader:
             One-call override for retaining a source DICOM beside NIfTI outputs.
         reference_dicom_name
             One-call override for the retained metadata DICOM file name.
+        append_study_hash
+            Override the constructor setting for custom full-study folders.
+            False uses exact safe labels and rejects collisions before downloads.
         keep_reference_dicom
             Deprecated alias for ``save_reference_dicom``.
+
+        return_report
+            Return data plus per-task rows and summary tables instead of only data.
+        show_progress
+            Display task progress; disable for quiet or JSON-log workflows.
 
         Returns
         -------
@@ -786,6 +937,8 @@ class DICOMDownloader:
             save_reference_dicom=save_reference_dicom,
             reference_dicom_name=reference_dicom_name,
             keep_reference_dicom=keep_reference_dicom,
+            append_study_hash=append_study_hash,
+            return_report=return_report, show_progress=show_progress,
         )
 
     def _download_series_to_dir(
@@ -812,7 +965,7 @@ class DICOMDownloader:
                 skipped=True,
             )
         try:
-            with tempfile.TemporaryDirectory() as tmpdir:
+            with tempfile.TemporaryDirectory(dir=getattr(self, "_temporary_root", None)) as tmpdir:
                 tmp_path = pathlib.Path(tmpdir)
                 saved: List[pathlib.Path] = []
                 seen_sop: set[str] = set()
@@ -820,6 +973,7 @@ class DICOMDownloader:
                     study_instance_uid=study_uid,
                     series_instance_uid=series_uid,
                 ):
+                    _validate_instance_identity(instance, study_uid, series_uid)
                     saved.append(_save_unique_instance(instance, tmp_path, seen_sop))
                 if not saved:
                     return DicomResult(
@@ -902,8 +1056,12 @@ class DICOMDownloader:
         return resolved_save, resolved_name
 
     @staticmethod
-    def _study_output_dir_name(study_uid: str, study_folder_name: Optional[object]) -> str:
+    def _study_output_dir_name(study_uid: str, study_folder_name: Optional[object],
+                               append_study_hash: bool = True) -> str:
         """Resolve a study-specific directory, optionally with a readable prefix."""
+        _validate_input_uid(study_uid)
+        if not append_study_hash:
+            return _exact_study_label(study_folder_name)
         if study_folder_name is None:
             return DICOMDownloader.download_id(study_uid)
         try:
@@ -924,6 +1082,83 @@ class DICOMDownloader:
         prefix = safe.encode("utf-8")[:240 - len(study_id) - 2].decode("utf-8", errors="ignore")
         return f"{prefix}__{study_id}"
 
+
+
+
+def _validate_instance_identity(instance, study_uid, series_uid=None):
+    """Account for every retrieved instance before publishing its study or series."""
+    try:
+        study = str(instance.StudyInstanceUID)
+        series = str(instance.SeriesInstanceUID)
+        sop = str(instance.SOPInstanceUID)
+        for uid in (study, series, sop):
+            _validate_input_uid(uid)
+        if study != study_uid or (series_uid is not None and series != series_uid):
+            raise ValueError
+    except (AttributeError, TypeError, ValueError):
+        raise _DICOMValidationError("identity") from None
+
+def _validate_input_uid(value):
+    """Reject missing/non-string UIDs before hashing or making requests."""
+    if not isinstance(value, str) or not value or len(value) > 64:
+        raise ValueError("StudyInstanceUID values must be nonmissing DICOM UID strings; preserve strings when reading CSV.")
+    if any(not component.isascii() or not component.isdigit() or
+           (len(component) > 1 and component.startswith("0")) for component in value.split(".")):
+        raise ValueError("StudyInstanceUID values must contain valid numeric UID components.")
+
+
+def _exact_study_label(value):
+    """Require an explicit safe directory component when omitting the hash."""
+    if isinstance(value, bool) or not isinstance(value, (str, numbers.Integral)):
+        raise ValueError("Hash-free study folders require a nonmissing string or integer label.")
+    label = str(value)
+    reserved = {"CON", "PRN", "AUX", "NUL", *(f"COM{i}" for i in range(1, 10)), *(f"LPT{i}" for i in range(1, 10))}
+    if (not label or label != label.strip() or label in {".", ".."}
+            or label.endswith((".", " ")) or len(label.encode("utf-8")) > 240
+            or any(c in '<>:"/\\|?*' or ord(c) < 32 for c in label)
+            or label.split(".")[0].upper() in reserved):
+        raise ValueError("Study folder labels must be safe single directory names; labels are not sanitized in hash-free mode.")
+    return label
+
+
+def _check_exact_study_directory(directory, study_uid):
+    """Prevent reusing an exact-label folder for another or unidentifiable study."""
+    if directory.is_symlink():
+        raise ValueError("Study output directory must not be a symbolic link.")
+    if directory.parent.exists():
+        for sibling in directory.parent.iterdir():
+            if sibling.name.casefold() == directory.name.casefold() and sibling.name != directory.name:
+                raise ValueError("Study folder name collides with an existing directory.")
+    if not directory.exists():
+        return
+    if not directory.is_dir():
+        raise ValueError("Study output path is not a directory.")
+    children = list(directory.iterdir())
+    if not children:
+        return
+    evidence = False
+    manifest = directory / "study_manifest.json"
+    if manifest.exists():
+        try:
+            rows = json.loads(manifest.read_text())["series"]
+            if not rows or any(row["study_uid"] != study_uid for row in rows):
+                raise ValueError("Study folder belongs to a different study.")
+            evidence = True
+        except (OSError, KeyError, TypeError, json.JSONDecodeError):
+            raise ValueError("Existing study identity cannot be verified; use a new folder.") from None
+    for path in directory.rglob("*"):
+        if path.is_symlink():
+            raise ValueError("Study output must not contain symbolic links.")
+        if path.is_file() and path.suffix.lower() == ".dcm":
+            try:
+                uid = str(pydicom.dcmread(path, stop_before_pixels=True).StudyInstanceUID)
+            except Exception:
+                raise ValueError("Existing study identity cannot be verified; use a new folder.") from None
+            if uid != study_uid:
+                raise ValueError("Study folder contains a different study.")
+            evidence = True
+    if not evidence:
+        raise ValueError("Existing study identity cannot be verified; use a new folder or retain a study manifest.")
 
 def _series_exists(target_dir: pathlib.Path, output_format: str, series_uid: Optional[str] = None,
                    reference_name: Optional[str] = None) -> bool:
@@ -977,16 +1212,22 @@ def _build_tasks(
     series_uid_col: str,
     download_full_study: bool,
     study_folder_name_col: Optional[str] = None,
+    append_study_hash: bool = True,
 ) -> List[Tuple[str, Optional[str], bool, Optional[str]]]:
     """Build download tasks from a DataFrame."""
     tasks: List[Tuple[str, Optional[str], bool, Optional[str]]] = []
     seen = set()
-    for row in df.itertuples(index=False):
-        study_uid = getattr(row, study_uid_col)
-        series_uid = getattr(row, series_uid_col, None) if not download_full_study else None
+    folders = {}
+    if not df.columns.is_unique:
+        raise ValueError("Download input column names must be unique.")
+    for values in df.itertuples(index=False, name=None):
+        row = dict(zip(df.columns, values))
+        study_uid = row[study_uid_col]
+        _validate_input_uid(study_uid)
+        series_uid = row.get(series_uid_col) if not download_full_study else None
         folder_label: Optional[str] = None
         if download_full_study and study_folder_name_col:
-            v = getattr(row, study_folder_name_col)
+            v = row[study_folder_name_col]
             if v is not None:
                 try:
                     if bool(pd.isna(v)):
@@ -994,14 +1235,26 @@ def _build_tasks(
                 except (TypeError, ValueError):
                     pass
             if v is not None:
-                folder_label = str(v).strip() or None
-        folder = DICOMDownloader._study_output_dir_name(study_uid, folder_label) if download_full_study else None
+                folder_label = (str(v).strip() or None) if append_study_hash else _exact_study_label(v)
+        folder = DICOMDownloader._study_output_dir_name(study_uid, folder_label, append_study_hash) if download_full_study else None
+        if download_full_study and not append_study_hash:
+            collision_key = folder.casefold()
+            if collision_key in folders and folders[collision_key] != (study_uid, folder):
+                raise ValueError("Study folder labels collide; use a unique label per study or enable append_study_hash.")
+            folders[collision_key] = (study_uid, folder)
         key = (study_uid, series_uid, folder)
         if key not in seen:
             tasks.append((study_uid, series_uid, download_full_study, folder_label))
             seen.add(key)
     return tasks
 
+
+
+@private_transport
+def _indexed_worker_download_task(value):
+    number, args = value
+    started = time.monotonic()
+    return number, _worker_download_task(args), time.monotonic() - started
 
 def _worker_download_task(
     args: Tuple[
@@ -1019,6 +1272,8 @@ def _worker_download_task(
         bool,
         str,
         Optional[_WorkerAuth],
+        bool,
+        bool,
     ],
 ) -> List[DicomResult]:
     """Worker helper for parallel DICOM downloads."""
@@ -1050,7 +1305,14 @@ def _worker_download_task(
         use_compression=use_compression,
         save_reference_dicom=save_reference_dicom,
         reference_dicom_name=reference_dicom_name,
+        append_study_hash=args[14] if len(args) > 14 else True,
+        write_completion_record=args[15] if len(args) > 15 else True,
+        request_timeout=args[16] if len(args) > 16 else None,
+        retries=args[17] if len(args) > 17 else None,
     )
+    if len(args) > 18:
+        downloader._temporary_root = pathlib.Path(args[18])
+        downloader._temporary_root.mkdir(parents=True, exist_ok=True)
     try:
         return downloader._run_task(
             task=task,
@@ -1115,6 +1377,12 @@ def main() -> int:
         action="store_true",
         help="Do not write study_manifest.json for full-study downloads",
     )
+    parser.add_argument("--request-timeout", type=float, default=None)
+    parser.add_argument("--parallel-job-timeout", type=float, default=None)
+    parser.add_argument("--no-study-hash", action="store_true",
+                        help="Use exact unique study-folder labels without appending a hash")
+    parser.add_argument("--no-completion-record", action="store_true",
+                        help="Do not write per-series JSON completion records")
     parser.add_argument("--results-csv", default=None)
     args = parser.parse_args()
 
@@ -1130,47 +1398,54 @@ def main() -> int:
         num_processes=args.processes,
         save_reference_dicom=args.save_reference_dicom,
         reference_dicom_name=args.reference_dicom_name,
+        append_study_hash=not args.no_study_hash,
+        write_completion_record=not args.no_completion_record,
+        request_timeout=args.request_timeout, parallel_job_timeout=args.parallel_job_timeout,
     )
 
-    if args.csv:
-        df = pd.read_csv(args.csv)
-        results = downloader.download_from_dataframe(
-            df=df,
-            output_dir=args.output_dir,
-            study_uid_col=args.study_col,
-            series_uid_col=args.series_col,
-            download_full_study=args.full_study,
-            skip_existing=args.skip_existing,
-            write_manifest=args.manifest,
-            study_layout=args.study_layout,
-            study_folder_name_col=args.study_folder_col,
-            save_study_manifest=False if args.no_study_manifest else None,
-            results_csv=args.results_csv,
-        )
-        info(f"Download results: {len(results)}; failed: {int(results['error'].notna().sum()) if 'error' in results else 0}")
+    try:
+        if args.csv:
+            df = pd.read_csv(args.csv, dtype="string")
+            results = downloader.download_from_dataframe(
+                df=df,
+                output_dir=args.output_dir,
+                study_uid_col=args.study_col,
+                series_uid_col=args.series_col,
+                download_full_study=args.full_study,
+                skip_existing=args.skip_existing,
+                write_manifest=args.manifest,
+                study_layout=args.study_layout,
+                study_folder_name_col=args.study_folder_col,
+                save_study_manifest=False if args.no_study_manifest else None,
+                results_csv=args.results_csv,
+            )
+            info(f"Download results: {len(results)}; failed: {int(results['error'].notna().sum()) if 'error' in results else 0}")
+            return int(results.empty or results["error"].notna().any())
+
+        if not args.study_uid:
+            raise SystemExit("Provide --study-uid or --csv.")
+
+        if args.series_uid:
+            result = downloader.download_series(
+                study_uid=args.study_uid,
+                series_uid=args.series_uid,
+                output_dir=args.output_dir,
+                skip_existing=args.skip_existing,
+            )
+            info("Download failed" if result.error else ("Download skipped" if result.skipped else "Download succeeded"))
+        else:
+            results = downloader.download_study(
+                study_uid=args.study_uid,
+                output_dir=args.output_dir,
+                skip_existing=args.skip_existing,
+                write_manifest=args.manifest,
+                study_layout=args.study_layout,
+                study_folder_name=args.study_folder_name,
+                save_study_manifest=False if args.no_study_manifest else None,
+            )
+            for result in results:
+                info("Download failed" if result.error else ("Download skipped" if result.skipped else "Download succeeded"))
         return 0
 
-    if not args.study_uid:
-        raise SystemExit("Provide --study-uid or --csv.")
-
-    if args.series_uid:
-        result = downloader.download_series(
-            study_uid=args.study_uid,
-            series_uid=args.series_uid,
-            output_dir=args.output_dir,
-            skip_existing=args.skip_existing,
-        )
-        info("Download failed" if result.error else ("Download skipped" if result.skipped else "Download succeeded"))
-    else:
-        results = downloader.download_study(
-            study_uid=args.study_uid,
-            output_dir=args.output_dir,
-            skip_existing=args.skip_existing,
-            write_manifest=args.manifest,
-            study_layout=args.study_layout,
-            study_folder_name=args.study_folder_name,
-            save_study_manifest=False if args.no_study_manifest else None,
-        )
-        for result in results:
-            info("Download failed" if result.error else ("Download skipped" if result.skipped else "Download succeeded"))
-    return 0
+    finally:
+        downloader.close()

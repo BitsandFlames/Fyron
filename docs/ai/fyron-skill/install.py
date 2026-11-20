@@ -71,7 +71,7 @@ responses, credentials, accessions, MRNs, or patient-linked dates to external
 LLMs. Use the local `.claude/fyron-skill/` folder and
 `fyron-claude-project-knowledge.md` as the project knowledge source.
 
-Public docs: https://fyron.bitsandflames.ai
+Public docs: https://docs.fyron.bitsandflames.ai
 {CLAUDE_BLOCK_END}
 """
 

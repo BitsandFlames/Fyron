@@ -12,6 +12,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Optional, Union
 
 import requests
+from .._http import private_transport
 import jwt
 from requests.auth import AuthBase, HTTPBasicAuth
 
@@ -70,6 +71,7 @@ class TokenAuth(AuthBase):
     Expects token endpoints that return JSON with `access_token` or `token`.
     """
 
+    @private_transport
     def __init__(
         self,
         username: str,
@@ -109,6 +111,7 @@ class TokenAuth(AuthBase):
         r.headers["Authorization"] = f"Bearer {self._get_token()}"
         return r
 
+    @private_transport
     def _get_token(self, rejected: Optional[str] = None) -> str:
         """Return a live token, serializing renewal for parent-owned workers."""
         with self._lock:
@@ -257,6 +260,7 @@ class Auth:
     redirects. Device options are keyword-only and do not alter other modes.
     """
 
+    @private_transport
     def __init__(
         self,
         auth_url: Optional[str] = None,

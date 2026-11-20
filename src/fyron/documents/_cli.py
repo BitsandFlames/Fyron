@@ -13,7 +13,8 @@ from .._diagnostics import error_event, event
 from ..console import console_message
 from ..fhir.auth import Auth
 from ..fhir._device_auth import _url as _oauth_url
-from .client import DocumentDownloader, _resolve_document_url, _validate_document_id, _document_ids
+from .._client_io import atomic_csv
+from .client import DocumentDownloader, _normalize_content_types, _resolve_document_url, _validate_document_id, _document_ids
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +33,7 @@ def _add_parser(sub):
     destination.add_argument("--output", help="Exact file destination; single URL only")
     destination.add_argument("--output-dir", help="Output directory (default: documents_out)")
     parser.add_argument("--flat-output", action="store_true",
-                        help="Save directly in the output directory using URL-hash filenames")
+                        help="Save directly in the output directory using custom IDs, or URL hashes when no IDs are supplied")
     parser.add_argument("--auth-type", choices=("none", "device_code", "client_credentials"), default="none")
     parser.add_argument("--auth-url", help="OIDC issuer")
     parser.add_argument("--client-id")
@@ -43,6 +44,7 @@ def _add_parser(sub):
     parser.add_argument("--authorization-endpoint")
     parser.add_argument("--token-cache", help="Opt-in plaintext device-token cache")
     parser.add_argument("--no-reauthentication", action="store_true", help="Disallow interactive device approval")
+    parser.add_argument("--content-type", action="append", dest="content_types", help="Expected MIME type; may be repeated")
     parser.add_argument("--pdf", action="store_true", help="Require HTTP 200, PDF content type, and PDF signature")
     parser.add_argument("--timeout", type=float, default=90, help="Download request timeout in seconds (default: 90)")
     parser.add_argument("--workers", type=int, default=4)
@@ -56,6 +58,7 @@ def _add_parser(sub):
 
 def _validate(args):
     """Validate all inputs before creating Auth (which can contact the issuer)."""
+    _normalize_content_types(args.content_types, args.pdf)
     if not math.isfinite(args.timeout) or args.timeout <= 0 or args.workers < 1:
         raise ValueError("--timeout must be positive and finite; --workers must be positive.")
     if (args.csv and args.document_id is not None) or (args.url and args.id_col is not None):
@@ -156,7 +159,7 @@ def _run(args):
                 timeout=args.timeout, max_workers=args.workers, skip_existing=not args.overwrite,
                 require_pdf=args.pdf, allow_redirects=args.allow_redirects,
                 write_completion_record=not args.no_completion_record,
-                flat_output=args.flat_output,
+                flat_output=args.flat_output, expected_content_types=args.content_types,
             ))
             if args.url:
                 result = downloader.download_url(urls[0], output_path=args.output, document_id=ids[0])
@@ -165,14 +168,14 @@ def _run(args):
                 frame = pd.DataFrame({"document_url": urls, "document_id": ids})
                 results = downloader.download_from_df(
                     frame, id_col="document_id" if args.id_col is not None else None,
+                    show_progress=not (args.no_progress or args.quiet or args.json_log),
                 )
             if args.results_csv:
                 report = Path(args.results_csv)
                 # Resolved filenames can depend on response content types.
                 if any(report.resolve() == Path(p).resolve() for p in results["path"]):
                     raise ValueError("Result report would overwrite a document.")
-                report.parent.mkdir(parents=True, exist_ok=True)
-                results.to_csv(report, index=False)
+                atomic_csv(results, report, forbidden=results["path"])
         failed = int(results["error"].notna().sum())
         skipped = int((results["error"].isna() & results["skipped"]).sum())
         succeeded = len(results) - failed - skipped

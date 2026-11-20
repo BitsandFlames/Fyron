@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from .._diagnostics import event, safe_error, batch_report, error_event, completed_task
-from .._http import guard_redirects
+from .._http import guarded_hooks, get_with_retry, default_retries, private_transport
 
 import logging
 import multiprocessing as mp
@@ -413,6 +413,7 @@ def parse_fhir_path(
     return records
 
 
+@private_transport
 def _request_json(
     session: requests.Session,
     url: str,
@@ -421,9 +422,13 @@ def _request_json(
     log: Optional[logging.Logger],
     cache: Optional[ResponseCache] = None,
     log_request_url: bool = False,
+    retries: Optional[Retry] = None,
+    extra_headers: Optional[Dict[str, str]] = None,
 ) -> Tuple[Dict[str, Any], str, int, float]:
     """GET a URL, validate response, parse JSON, and return payload plus metadata."""
     start = time.perf_counter()
+    if log is not None:
+        event(log, "fhir", "started")
     query_params = _params_to_query_sequence(params)
     qs = _build_query_string(query_params) if query_params else ""
     full_url = url + ("?" + qs if qs else "")
@@ -436,6 +441,7 @@ def _request_json(
             id(session.auth) if hasattr(session, "auth") else None,
             session.headers.get("Authorization"),
             session.headers.get("Accept"),
+            tuple(sorted((extra_headers or {}).items())),
         )
         cached = cache.get(cache_key, start)
         if cached is not None:
@@ -445,8 +451,7 @@ def _request_json(
             elapsed_ms = (time.perf_counter() - start) * 1000.0
             return data, response_url, status_code, elapsed_ms
     try:
-        guard_redirects(session)
-        response = session.get(full_url, timeout=timeout)
+        response = get_with_retry(session, full_url, retries=retries, timeout=timeout, headers=extra_headers)
         response.raise_for_status()
     except requests.RequestException as exc:
         if log is not None:
@@ -454,19 +459,21 @@ def _request_json(
         raise FHIRRequestError(safe_error(exc)) from None
 
     elapsed_ms = (time.perf_counter() - start) * 1000.0
-    if log is not None:
-        event(log, "fhir", "activity", level=logging.DEBUG)
     try:
         data = response.json()
     except ValueError as exc:
         if log is not None:
             error_event(log, "fhir", exc)
         raise FHIRRequestError("Invalid JSON response (unexpected_response).") from None
+    _ensure_bundle_payload(data, response.url)
+    if log is not None:
+        event(log, "fhir", "finished", elapsed_s=elapsed_ms / 1000, http_status=response.status_code)
     if cache is not None:
         cache.set(cache_key, (data, response.url, response.status_code, elapsed_ms), time.perf_counter())
     return data, response.url, response.status_code, elapsed_ms
 
 
+@private_transport
 def _write_json_request(
     session: requests.Session,
     method: str,
@@ -474,11 +481,12 @@ def _write_json_request(
     payload: Dict[str, Any],
     timeout: int,
     log: Optional[logging.Logger],
+    extra_headers: Optional[Dict[str, str]] = None,
 ) -> FHIRWriteResult:
     """Send a FHIR write request and return compact metadata."""
     try:
-        guard_redirects(session)
-        response = session.request(method, url, json=payload, timeout=timeout)
+        response = session.request(method, url, json=payload, timeout=timeout,
+                                   hooks=guarded_hooks(session), headers=extra_headers)
         response.raise_for_status()
     except requests.RequestException as exc:
         if log is not None:
@@ -525,6 +533,15 @@ def _ensure_bundle_payload(payload: Any, response_url: str) -> Dict[str, Any]:
             "total": 1,
             "entry": [{"fullUrl": response_url, "resource": payload}],
         }
+    entries = payload.get("entry", [])
+    links = payload.get("link", [])
+    if not isinstance(entries, list) or not isinstance(links, list):
+        raise FHIRRequestError("Malformed FHIR Bundle entries or links (unexpected_response).")
+    if any(not isinstance(entry, dict) or not isinstance(entry.get("resource"), dict) for entry in entries):
+        raise FHIRRequestError("FHIR search entries must contain resource objects (unexpected_response).")
+    if any(not isinstance(link, dict) or not isinstance(link.get("url"), str)
+           or not isinstance(link.get("relation"), str) for link in links):
+        raise FHIRRequestError("Malformed FHIR pagination links (unexpected_response).")
     return payload
 
 
@@ -654,6 +671,7 @@ def _worker_fetch_bundles(
                 log=log,
                 cache=cache,
                 log_request_url=log_request_urls,
+                retries=args[14] if len(args) > 14 else None,
             )
             if response_url in seen_pages:
                 raise FHIRRequestError("Repeated pagination page (unexpected_response).")
@@ -708,7 +726,7 @@ class FHIRRestClient:
     log_requests:
         If True, logs request timing and summaries.
     log_request_urls:
-        If True, prints each request URL (with query string) to the console.
+        Compatibility flag for controlled activity events. URLs are never logged.
     token_auth_method:
         Token auth method for password-based token endpoints ("basic" or "post").
     cache_ttl_seconds:
@@ -780,25 +798,16 @@ class FHIRRestClient:
             else:
                 self.session = requests.Session()
 
-        if self.extra_headers:
-            self.session.headers.update(self.extra_headers)
-
-        if retries is None:
-            retries = Retry(
-                total=3,
-                backoff_factor=0.5,
-                status_forcelist=[502, 503, 504],
-                allowed_methods=["GET"],
-                raise_on_status=False,
-            )
-        adapter = HTTPAdapter(max_retries=retries)
-        self._retries = retries
-        self.session.mount("http://", adapter)
-        self.session.mount("https://", adapter)
+        self._request_headers = dict(self.extra_headers or {})
+        self._retries = retries if retries is not None else default_retries()
+        if self._close_session_on_exit:
+            adapter = HTTPAdapter(max_retries=self._retries)
+            self.session.mount("http://", adapter)
+            self.session.mount("https://", adapter)
 
         self._bearer_token = bearer_token or os.environ.get("FHIR_TOKEN")
         if self._bearer_token and self.session.auth is None:
-            self.session.headers["Authorization"] = f"Bearer {self._bearer_token}"
+            self._request_headers["Authorization"] = f"Bearer {self._bearer_token}"
         event(logger, "fhir", "activity", level=logging.DEBUG)
 
     def __enter__(self) -> "FHIRRestClient":
@@ -862,6 +871,7 @@ class FHIRRestClient:
                     log=logger if self.log_requests else None,
                     cache=self._response_cache,
                     log_request_url=self.log_request_urls,
+                    retries=self._retries, extra_headers=self._request_headers,
                 )
                 total_requests += 1
                 if response_url in seen_pages:
@@ -943,7 +953,7 @@ class FHIRRestClient:
         _validate_max_pages(max_pages)
         if max_pages == 0:
             return 0
-        headers: Dict[str, str] = dict(self.session.headers)
+        headers: Dict[str, str] = {**self.session.headers, **self._request_headers}
         auth_mode = "none"
         token: Optional[str] = None
         if hasattr(self.session, "auth"):
@@ -1073,6 +1083,9 @@ class FHIRRestClient:
             "job", "status", "pages", "resource_entries", "exhausted", "page_limited"])
         summary = pd.DataFrame([{
             "queries": len(jobs), "execution_complete": True,
+            "executed_queries": sum(row["status"] != "not_requested" for row in rows),
+            "not_requested": sum(row["status"] == "not_requested" for row in rows),
+            "pagination_complete_queries": sum(row["exhausted"] for row in rows),
             "retrieval_exhaustive": bool(rows) and all(row["exhausted"] for row in rows),
             "no_match": sum(row["status"] == "no_match" for row in rows),
             "page_limited": sum(row["page_limited"] for row in rows),
@@ -1468,11 +1481,18 @@ class FHIRRestClient:
             raise ValueError("Input DataFrame is empty.")
         if not df.columns.is_unique:
             raise ValueError("Input column names must be unique.")
+        if not df.columns.is_unique:
+            raise ValueError("Input query columns must have unique labels.")
         for _, col in column_map.items():
             if col not in df.columns:
                 raise ValueError(f"Column '{col}' not found in DataFrame.")
             if df[col].isnull().any():
                 raise ValueError(f"Column '{col}' contains null values.")
+            for value in df[col]:
+                values = value if isinstance(value, (list, tuple)) else [value]
+                if not values or any(not pd.api.types.is_scalar(item) or pd.isna(item)
+                                     or (isinstance(item, str) and not item.strip()) for item in values):
+                    raise ValueError("Cohort query values must be nonmissing, nonblank scalars or nonempty scalar lists.")
 
         base_params = params or {}
         prefixes = param_prefix or {}
@@ -1956,6 +1976,7 @@ class FHIRRestClient:
             payload=resource,
             timeout=self.request_timeout,
             log=logger if self.log_requests else None,
+            extra_headers=self._request_headers,
         )
 
     def update_resource(
@@ -1978,6 +1999,7 @@ class FHIRRestClient:
             payload=resource,
             timeout=self.request_timeout,
             log=logger if self.log_requests else None,
+            extra_headers=self._request_headers,
         )
 
     def submit_bundle(self, bundle: Dict[str, Any]) -> FHIRWriteResult:
@@ -1994,6 +2016,7 @@ class FHIRRestClient:
             payload=bundle,
             timeout=self.request_timeout,
             log=logger if self.log_requests else None,
+            extra_headers=self._request_headers,
         )
 
 

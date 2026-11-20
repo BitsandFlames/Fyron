@@ -1,5 +1,6 @@
 """Parent-owned token leases and monitored worker pools."""
 
+from .._http import private_transport
 import logging
 import math
 import multiprocessing as mp
@@ -113,6 +114,7 @@ class TokenBroker:
         self.last_token = None
         self.lock = threading.Lock()
 
+    @private_transport
     def lease(self, rejected, deadline=None):
         with self.lock:
             return self._lease(rejected, deadline)
@@ -293,10 +295,17 @@ def managed_pool(auth, processes, auth_timeout):
                 q.close()
 
 
-def monitored_results(pool, events, function, args, timeout):
+def monitored_results(pool, events, function, args, timeout, *, operation="fhir"):
     """Fail on dead workers or elapsed execution deadlines, never skip jobs."""
     from .rest import FHIRRequestError
 
+    if operation == "dicom":
+        from ..dicom.client import DicomDownloadError
+        failure_type = DicomDownloadError
+    else:
+        failure_type = FHIRRequestError
+    noun = "downloads" if operation == "dicom" else "queries"
+    label = "Download" if operation == "dicom" else "Query"
     workers = list(pool._pool)
     active = {}
     completed = set()
@@ -315,19 +324,19 @@ def monitored_results(pool, events, function, args, timeout):
                 active[number] = start, state
         dead = [p for p in workers if p.exitcode is not None]
         if dead:
-            raise FHIRRequestError(
-                f"Parallel worker exited; {len(args) - len(completed)} queries unfinished."
+            raise failure_type(
+                f"Parallel worker exited; {len(args) - len(completed)} {noun} unfinished."
             )
         now = time.monotonic()
         for number, (start, state) in active.items():
             if timeout is not None and now - start > timeout:
-                raise FHIRRequestError(
-                    f"Query job {number} exceeded deadline in {state}; {len(args) - len(completed)} queries unfinished."
+                raise failure_type(
+                    f"{label} job {number} exceeded deadline in {state}; {len(args) - len(completed)} {noun} unfinished."
                 )
         if now - last_warning >= 30:
             for number, (start, state) in active.items():
                 if now - start >= 30:
-                    event(logger, "fhir", state, level=logging.WARNING,
+                    event(logger, operation, state, level=logging.WARNING,
                           job=number, elapsed_s=now - start,
                           unfinished=len(args) - len(completed))
             last_warning = now
@@ -336,8 +345,8 @@ def monitored_results(pool, events, function, args, timeout):
         except mp.TimeoutError:
             continue
         except Exception:  # noqa: BLE001 - remote exceptions may contain clinical query values.
-            raise FHIRRequestError(
-                f"Parallel query failed; {len(args) - len(completed)} queries unfinished."
+            raise failure_type(
+                f"Parallel {label.lower()} failed; {len(args) - len(completed)} {noun} unfinished."
             ) from None
         completed.add(number)
         active.pop(number, None)

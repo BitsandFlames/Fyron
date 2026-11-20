@@ -74,6 +74,16 @@ def test_other_network_clients_guard_shared_transport(tmp_path, client_kind):
         session = client.session
     adapter = RedirectAdapter("https://foreign.invalid/collect")
     session.mount("https://", adapter)
-    with pytest.raises(requests.RequestException, match="redirect"):
-        session.post("https://service.invalid/input", json={"text": "SYNTHETIC"})
+    if client_kind == "documents":
+        result = client.download_url("https://service.invalid/input")
+        assert result.error is not None
+        assert session.hooks == {"response": []}
+    elif client_kind == "dicom":
+        from fyron.dicom.client import DicomDownloadError
+        with pytest.raises(DicomDownloadError):
+            client.download_study("1.2.3", tmp_path)
+        assert session.hooks == {"response": []}
+    else:
+        with pytest.raises(requests.RequestException, match="redirect"):
+            session.post("https://service.invalid/input", json={"text": "SYNTHETIC"})
     assert len(adapter.calls) == 1

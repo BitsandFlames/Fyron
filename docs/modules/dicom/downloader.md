@@ -1,5 +1,75 @@
 # DICOMDownloader
 
+**Version scope:** Fyron 0.3.20b5 (Beta 5). Reporting, timeout, validation and naming additions described here require Beta 5 or newer.
+
+## Find the right operation
+
+Download source DICOM when you need the complete instances and metadata. Choose NIfTI when your next step needs a volume per series. Start with one study, inspect the results, then run a reviewed manifest.
+
+**[All parameters, defaults and accepted options](downloader/parameters.md)** · [Authentication](../../authentication/dicomweb.md) · [Hands-on walkthrough](../../onboarding/dicomweb.md)
+
+| What you want | Use | Important controls |
+| --- | --- | --- |
+| One selected series | `download_series` | study UID, series UID, `skip_existing` |
+| All returned series in one study | `download_study` | `study_layout`, `study_folder_name` |
+| Whole studies from a table | `download_from_dataframe` | `download_full_study=True`, `study_uid_col` |
+| Exact accession-number folders | full-study methods | label/label column plus `append_study_hash=False` |
+| Preserve source instances | constructor | `output_format="dicom"` |
+| One volume per series | constructor | `output_format="nifti"`; optional reference DICOM |
+| Detailed batch accounting | DataFrame methods | `return_report=True`, optional `results_csv` |
+
+### Example: whole studies, flat DICOM, exact folder labels
+
+First create your approved `auth`. The IDs below are invented; replace them with a reviewed manifest. Whole-study mode does not require a series UID column.
+
+```python
+import os
+import pandas as pd
+from dotenv import load_dotenv
+from fyron import DICOMDownloader
+from fyron.console import configure_logging
+
+configure_logging("INFO", color=True)
+load_dotenv(".env", override=False)
+studies = pd.DataFrame({
+    "study_instance_uid": ["2.25.1001", "2.25.1002"],
+    "ACC_NR": ["00123", "00124"],
+})
+# For CSV input: studies = pd.read_csv("studies.csv", dtype="string")
+
+with DICOMDownloader(
+    auth=auth, dicom_web_url=os.environ["DICOM_WEB_URL"],
+    output_format="dicom", num_processes=1,
+    request_timeout=90, log_downloads=True,
+    write_completion_record=False,
+) as loader:
+    result = loader.download_from_dataframe(
+        df=studies, output_dir="dicom_out",
+        study_uid_col="study_instance_uid", download_full_study=True,
+        study_layout="flat", study_folder_name_col="ACC_NR",
+        append_study_hash=False, save_study_manifest=False,
+        results_csv="results/dicom.csv", return_report=True,
+    )
+
+series_results = result["data"]
+summary = result["report"]["summary"]
+failed = series_results.loc[series_results["error"].notna()]
+```
+
+Output is `dicom_out/00123/<SOPInstanceUID>.dcm`, with no new JSON sidecars. Each study retains its own folder. A repeated accession label for different studies raises before fetching. `download_id` remains a deterministic hash in results even when the folder name omits it.
+
+| Control | Default behavior | Alternative and consequence |
+| --- | --- | --- |
+| `append_study_hash` | Append study hash to custom labels | False requires exact safe, unique labels |
+| `study_layout` | Per-series folders | `"flat"` removes series folders, retaining the study folder |
+| `save_study_manifest` | Inherit `write_manifest` | False omits the study summary JSON |
+| constructor `write_completion_record` | Write per-series completion JSON | False omits new records, so new files cannot be verified for later skips |
+| `skip_existing` | Skip verified outputs only | False explicitly permits replacement after review |
+| `request_timeout` / `parallel_job_timeout` | Both unset for DICOM | Set request waits and a separate worker execution deadline |
+
+The no-JSON example deliberately trades verified restarts for fewer sidecars. For resumable jobs, keep completion records enabled. Always inspect per-series errors: a completed study task can produce several series rows and does not prove the archive's entire inventory was supplied.
+
+
 For site-specific access setup, see [DICOMweb authentication](../../authentication/dicomweb.md). Choose the method and permissions approved by your administrator.
 
 Development update: see [Safe Network Diagnostics](../../diagnostics.md) for logging,
@@ -81,7 +151,7 @@ with Auth.client_credentials(
 
 Resource requests use Bearer tokens with parent-coordinated renewal. Explicit
 `auth` overrides environment Basic credentials. See
-[service-account authentication](https://fyron.bitsandflames.ai/modules/fhir/rest/#service-account-authentication)
+[service-account authentication](https://docs.fyron.bitsandflames.ai/modules/fhir/rest/#service-account-authentication)
 for endpoint overrides, provider setup, supported client methods, and limitations.
 
 ## Core Concepts
@@ -196,7 +266,7 @@ a DICOMweb 401 can indicate missing audience, scopes, or access rights.
 ## Device Authentication
 
 Use the same `Auth` interface as FHIR for browser-approved sign-in. See
-[device authentication](https://fyron.bitsandflames.ai/modules/fhir/rest/#device-authentication) for provider setup,
+[device authentication](https://docs.fyron.bitsandflames.ai/modules/fhir/rest/#device-authentication) for provider setup,
 cache security, unattended jobs, and token-refresh behavior.
 
 ```python
@@ -405,3 +475,128 @@ fyron dicom-download \
 - [DICOM](../../dicom/index.html) for the overview.
 - [Imaging](../../imaging/index.html) for local DICOM/NIfTI reading and QC.
 - [Audit & Provenance](../../audit/index.html) for reproducibility manifests.
+
+## Exact study folders and optional JSON records
+
+Default folder naming remains `<label>__<study_hash>`. To use an accession-number
+column exactly, set `append_study_hash=False`. This is available on the
+constructor, `download_study`, `download_from_dataframe` and its
+`download_from_df` alias. `study_folder_name` controls a single study;
+`study_folder_name_col` selects the batch column. Without the hash, an explicit,
+nonmissing safe folder label is required. Labels are neither sanitized nor
+truncated. Different studies cannot share a label, including case-insensitive
+collisions. Keep leading zeros by loading CSV identifiers with `dtype="string"`.
+
+```python
+import pandas as pd
+from fyron import DICOMDownloader
+
+# Use your existing approved Auth instance and DICOMweb endpoint.
+studies = pd.DataFrame({
+    "study_instance_uid": ["2.25.1001"],
+    "ACC_NR": ["00123"],
+})
+with DICOMDownloader(
+    auth=auth,
+    dicom_web_url=dicom_web_url,
+    output_format="dicom",
+    write_completion_record=False,
+) as loader:
+    results = loader.download_from_dataframe(
+        studies,
+        output_dir="dicom_out",
+        download_full_study=True,
+        study_layout="flat",
+        study_folder_name_col="ACC_NR",
+        append_study_hash=False,
+        save_study_manifest=False,
+        results_csv="results/dicom.csv",
+    )
+# Inspect results["error"] and results["path"] privately.
+```
+
+This produces `dicom_out/00123/<SOPInstanceUID>.dcm`, without new JSON sidecars.
+`study_layout="flat"` removes series subfolders; it retains the study folder.
+These options apply to DICOM and NIfTI output. The naming switch affects full
+studies only; individual-series folder naming remains unchanged.
+
+There are two independent JSON controls:
+
+| Option | Controls | Default |
+| --- | --- | --- |
+| `save_study_manifest=False` | Omit `study_manifest.json` for full studies | Inherits `write_manifest` |
+| `write_completion_record=False` on the constructor | Omit per-series `.fyron-complete-*.json` for every download route | Records enabled |
+
+Disabling writes does not delete existing JSON files. Without a valid completion
+record, a rerun cannot silently skip or replace existing files. Review the output
+and use `skip_existing=False` only for an intentional replacement. In hash-free
+mode existing folders must also identify the same study through original DICOM
+headers or a valid study manifest. NIfTI-only folders with neither cannot establish
+study identity; retain the manifest or choose a new folder. No sidecar-free
+migration or rename of older hashed folders is performed. Do not run independent
+jobs that write different studies to the same output folder.
+
+The corresponding CLI options work in `fyron dicom-download` and the compatibility
+DICOM command:
+
+```bash
+fyron dicom-download --csv studies.csv --full-study \
+  --output-dir dicom_out --output-format dicom \
+  --study-folder-col ACC_NR --study-layout flat \
+  --no-study-hash --no-study-manifest --no-completion-record \
+  --results-csv results/dicom.csv
+```
+
+For one study, use `--study-uid` and `--study-folder-name` instead of the CSV
+options. Authentication and access settings remain site-specific.
+
+## Reliable batch reports and deadlines
+
+Use `return_report=True` on `download_from_dataframe` or `download_from_df` for
+`{"data": ..., "report": {"rows": ..., "summary": ...}}`. The default remains
+a DataFrame. `data` retains the existing series-level results, ordered by input
+task rather than worker finish time. Reports count input rows, distinct requested
+tasks, completed/failed/skipped tasks, unfinished tasks and returned series rows
+separately. A two-series study is one task with two result rows. Reports contain
+ordinals and counts; identifying metadata remains in explicit result columns.
+Empty inputs retain the result-column schema.
+
+```python
+with DICOMDownloader(
+    auth=auth, dicom_web_url=dicom_web_url, output_format="dicom",
+    request_timeout=90, parallel_job_timeout=600, log_downloads=True,
+) as loader:
+    result = loader.download_from_dataframe(
+        studies, output_dir="dicom_out", download_full_study=True,
+        return_report=True, show_progress=True,
+        results_csv="results/dicom.csv",
+    )
+    data = result["data"]
+    summary = result["report"]["summary"]
+```
+
+Both new timeouts default to `None` for compatibility. `request_timeout` limits
+network connect/read waits. `parallel_job_timeout` starts when a worker executes,
+not while its task waits in the queue. A read timeout is not a total study-size
+or total-transfer deadline. Parallel deadline failures raise and terminate owned
+workers; already published series remain present and the batch is incomplete.
+
+Every retrieved instance must have usable SOP, study and series identifiers that
+agree with the request. Invalid or unreadable instances fail validation before
+the study is published, rather than being silently omitted. Later conversion or
+publication failures remain explicit per-series errors. Validation accounts for
+received instances; it does not prove the server supplied its entire inventory.
+A failed series can coexist with successfully published series, so inspect each
+error and retry deliberately.
+
+`show_progress=False` disables bars. The CLI also respects `--quiet`,
+`--no-progress`, `--no-color` and `--json-log`. Configure shared logging for Python
+applications; logs contain controlled timing, task ordinals and counts only.
+Upstream transport debug URLs, headers and warnings are suppressed within Fyron
+operations. Supplied sessions retain their adapters and hooks and stay open.
+
+Transient GET retries support `retries=Retry(...)`, including HTTP 429 and
+`Retry-After`. CLI deadlines are `--request-timeout` and
+`--parallel-job-timeout`. Result CSVs are replaced atomically after serialization;
+keep them separate from image files and client metadata. On interruption they
+contain only received task outcomes, not a promise of a complete extraction.

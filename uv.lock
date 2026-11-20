@@ -424,7 +424,7 @@ wheels = [
 
 [[package]]
 name = "fyron"
-version = "0.3.20b4"
+version = "0.3.20b5"
 source = { editable = "." }
 dependencies = [
     { name = "certifi" },

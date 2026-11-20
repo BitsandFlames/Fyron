@@ -2929,7 +2929,7 @@ Download documents from URLs into a deterministic folder structure.
 **Import path:** `fyron.documents.client.DocumentDownloader`
 
 ```python
-DocumentDownloader(self, auth: Optional[Union[Auth, requests.Session]] = None, base_url: Optional[str] = None, output_dir: Union[str, pathlib.Path] = 'documents_out', timeout: int = 30, skip_existing: bool = True, log_downloads: bool = False, max_workers: int = 4, retries: Optional[Retry] = None, save_mode: str = 'auto', force_extension: Optional[str] = None, basic_auth: Optional[Tuple[str, str]] = None, *, require_pdf: bool = False, allow_redirects: bool = True, write_completion_record: bool = True, flat_output: bool = False)
+DocumentDownloader(self, auth: Optional[Union[Auth, requests.Session]] = None, base_url: Optional[str] = None, output_dir: Union[str, pathlib.Path] = 'documents_out', timeout: int = 30, skip_existing: bool = True, log_downloads: bool = False, max_workers: int = 4, retries: Optional[Retry] = None, save_mode: str = 'auto', force_extension: Optional[str] = None, basic_auth: Optional[Tuple[str, str]] = None, *, require_pdf: bool = False, allow_redirects: bool = True, write_completion_record: bool = True, flat_output: bool = False, expected_content_types: Optional[Sequence[str]] = None)
 ```
 
 ### Parameters
@@ -2941,7 +2941,7 @@ DocumentDownloader(self, auth: Optional[Union[Auth, requests.Session]] = None, b
 | `output_dir` | no | `Union[str, pathlib.Path]` | `'documents_out'` | Parent folder where documents are stored. |
 | `timeout` | no | `int` | `30` | Request timeout in seconds. |
 | `skip_existing` | no | `bool` | `True` | Skip downloads if the target file already exists. |
-| `log_downloads` | no | `bool` | `False` | If True, logs each download. |
+| `log_downloads` | no | `bool` | `False` | Emit controlled timing, status and count events; never log URLs or content. |
 | `max_workers` | no | `int` | `4` | See signature. |
 | `retries` | no | `Optional[Retry]` | `None` | See signature. |
 | `save_mode` | no | `str` | `'auto'` | See signature. |
@@ -2950,7 +2950,8 @@ DocumentDownloader(self, auth: Optional[Union[Auth, requests.Session]] = None, b
 | `require_pdf` | no | `bool` | `False` | Require HTTP 200, application/pdf content type, and a PDF header. |
 | `allow_redirects` | no | `bool` | `True` | Follow only same-origin redirects when True; reject redirects when False. |
 | `write_completion_record` | no | `bool` | `True` | Write a hidden JSON record for verified restarts. If False, newly saved files cannot be skipped on subsequent runs without an existing valid record. |
-| `flat_output` | no | `bool` | `False` | Save documents directly in output_dir using URL-hash filenames. Results contain absolute paths. Explicit output_path takes precedence. |
+| `flat_output` | no | `bool` | `False` | Save documents directly in output_dir using custom IDs or default URL hashes. Results contain absolute paths. Explicit output_path takes precedence. |
+| `expected_content_types` | no | `Optional[Sequence[str]]` | `None` | Optional exact MIME types permitted for downloads, e.g. ["text/plain"]. |
 
 ### Returns
 
@@ -3028,24 +3029,26 @@ DocumentDownloader.download_url(self, url: str, *, output_path: Optional[Union[s
 
 #### `fyron.documents.client.DocumentDownloader.download_urls`
 
-Download a list of URLs and return results as a DataFrame.
+Download a list of URLs.
 
 **Import path:** `fyron.documents.client.DocumentDownloader.download_urls`
 
 ```python
-DocumentDownloader.download_urls(self, urls: Iterable[str], results_csv: Optional[Union[str, pathlib.Path]] = None) -> pd.DataFrame
+DocumentDownloader.download_urls(self, urls: Iterable[str], results_csv: Optional[Union[str, pathlib.Path]] = None, *, return_report: bool = False, show_progress: bool = False) -> Union[pd.DataFrame, Dict[str, object]]
 ```
 
 #### Parameters
 
 | Parameter | Required | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `urls` | yes | `Iterable[str]` |  | See signature. |
-| `results_csv` | no | `Optional[Union[str, pathlib.Path]]` | `None` | See signature. |
+| `urls` | yes | `Iterable[str]` |  | Iterable of approved document URLs. |
+| `results_csv` | no | `Optional[Union[str, pathlib.Path]]` | `None` | Optional CSV output, published atomically after downloads. |
+| `return_report` | no | `bool` | `False` | Return data plus per-task rows and summary tables when True. |
+| `show_progress` | no | `bool` | `False` | Display completed-document progress; default False. |
 
 #### Returns
 
-`pd.DataFrame`
+`pandas.DataFrame or dict` - Download results, or data plus controlled task reports.
 
 **See also:** [Core, Publication, And Utility module guide](../modules/core.md).
 
@@ -3056,7 +3059,7 @@ Download all URLs from a DataFrame column.
 **Import path:** `fyron.documents.client.DocumentDownloader.download_from_dataframe`
 
 ```python
-DocumentDownloader.download_from_dataframe(self, df: pd.DataFrame, url_col: str = 'document_url', results_csv: Optional[Union[str, pathlib.Path]] = None, *, id_col: Optional[str] = None) -> pd.DataFrame
+DocumentDownloader.download_from_dataframe(self, df: pd.DataFrame, url_col: str = 'document_url', results_csv: Optional[Union[str, pathlib.Path]] = None, *, id_col: Optional[str] = None, return_report: bool = False, show_progress: bool = False) -> Union[pd.DataFrame, Dict[str, object]]
 ```
 
 #### Parameters
@@ -3067,6 +3070,8 @@ DocumentDownloader.download_from_dataframe(self, df: pd.DataFrame, url_col: str 
 | `url_col` | no | `str` | `'document_url'` | Column containing document URLs. |
 | `results_csv` | no | `Optional[Union[str, pathlib.Path]]` | `None` | Optional results CSV destination, separate from document paths. |
 | `id_col` | no | `Optional[str]` | `None` | Optional column of unique filename-safe string or integer IDs. Omit to retain URL-hash naming. IDs are validated before requests. |
+| `return_report` | no | `bool` | `False` | Return data plus per-task rows and summary tables when True. |
+| `show_progress` | no | `bool` | `False` | Display completed-document progress; default False. |
 
 #### Returns
 
@@ -3081,7 +3086,7 @@ Short alias for download_from_dataframe.
 **Import path:** `fyron.documents.client.DocumentDownloader.download_from_df`
 
 ```python
-DocumentDownloader.download_from_df(self, df: pd.DataFrame, url_col: str = 'document_url', results_csv: Optional[Union[str, pathlib.Path]] = None, *, id_col: Optional[str] = None) -> pd.DataFrame
+DocumentDownloader.download_from_df(self, df: pd.DataFrame, url_col: str = 'document_url', results_csv: Optional[Union[str, pathlib.Path]] = None, *, id_col: Optional[str] = None, return_report: bool = False, show_progress: bool = False) -> Union[pd.DataFrame, Dict[str, object]]
 ```
 
 #### Parameters
@@ -3092,6 +3097,8 @@ DocumentDownloader.download_from_df(self, df: pd.DataFrame, url_col: str = 'docu
 | `url_col` | no | `str` | `'document_url'` | Column containing document URLs. |
 | `results_csv` | no | `Optional[Union[str, pathlib.Path]]` | `None` | Optional results CSV destination, separate from document paths. |
 | `id_col` | no | `Optional[str]` | `None` | Optional column of unique filename-safe string or integer IDs. Omit to retain URL-hash naming. IDs are validated before requests. |
+| `return_report` | no | `bool` | `False` | Return data plus per-task rows and summary tables when True. |
+| `show_progress` | no | `bool` | `False` | Display completed-document progress; default False. |
 
 #### Returns
 

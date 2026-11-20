@@ -10,9 +10,6 @@ Use Python 3.11 or newer. The configured PyRadiomics workflow uses Python 3.11.
 BOA tissue areas default to `tissues.nii.gz` (muscle=1, SAT=3, VAT=4, IMAT=5).
 Anatomical body-region masks are not tissue fallbacks; custom masks require
 explicit labels. Vertebral ranges use `[min_slice_idx, max_slice_idx)`.
-Curate binds published ports to loopback and keeps PostgreSQL internal.
-Original files and reviewed DICOM series are immutable; retry interrupted
-uploads with the same batch before export. Use a single local API process.
 
 For everyday cohort tracking, use `FlowTracker(id_col=..., progress=True)` and
 `flow.add(label, dataframe)`. Optional `with flow.step(label, kind="query")`
@@ -130,7 +127,7 @@ Choose the workflow by user intent:
 | Check image geometry, mask alignment, volumes, intensity ranges | `fyron.imaging.qc`, `fyron imaging-qc` |
 | Compare segmentations | `fyron.imaging.segmentation` |
 | Prepare nnU-Net v2 or YOLO training datasets | `fyron.datasets`, `fyron dataset-nnunetv2`, `fyron dataset-yolo-classify`, `fyron dataset-yolo-detect` |
-| Prepare CT/MRI folders for Curate review | `fyron.visualization.prepare_curate_image_previews`, `fyron dataset-curate-previews` |
+| Prepare CT/MRI folders for image review | `fyron.visualization.prepare_curate_image_previews`, `fyron dataset-curate-previews` |
 | Extract BOA body composition features | `fyron.boa_extraction`, `fyron boa-extract` |
 | Extract BOA radiomics | `fyron.boa_radiomics`, `fyron boa-radiomics` |
 | Render BOA collages or aligned CT/MR difference heatmaps | `fyron.visualization` |
@@ -152,7 +149,6 @@ Choose the workflow by user intent:
 | Model explainability, PDP, SHAP tables | `fyron.explainability` |
 | Clinical plots and paper figures | `fyron.plotting` |
 | Provenance manifests and file hashes | `fyron.audit`, `fyron audit-manifest` |
-| Curate local image cohorts | [standalone Curate](https://github.com/BitsandFlames/Curate) |
 | LLM-assisted prompting over docs/tables | `fyron.llm` |
 
 ## Install Extras
@@ -346,7 +342,6 @@ fyron dicom-download --dicom-web-url "$DICOM_WEB_URL" --study-uid "$STUDY_UID" -
 fyron synthetic-dicom --volume volume.nii.gz --reference-dicom dicom/ --output-dir synthetic/
 fyron dicom-seg --mask mask.nii.gz --source-dicom dicom/ --segments segments.json --output mask.seg.dcm --validate
 fyron dataset-curate-previews --input-dir ct_exports/ --output-dir curate_previews/
-# Start Curate separately: https://github.com/BitsandFlames/Curate
 fyron boa-extract --cohort-folder boa/ --output body_regions.csv --include-body-regions --include-total
 fyron boa-radiomics --cohort-folder boa/ --segmentation total --output radiomics.csv
 fyron imaging-qc --nifti image.nii.gz --mask mask.nii.gz --output qc.csv
@@ -426,4 +421,43 @@ Explain token renewal as demand-driven, not background keep-alive. Static Bearer
 
 ## Licensing
 
-Current project source and Curate frontend/backend use CC BY-NC 4.0. Describe it as source available for noncommercial use with attribution, not OSI open source or research-only. Preserve third-party licenses and earlier MIT permissions. Never rewrite historical release licensing or replace published artifacts; a future distribution of the license change needs a new version. Keep package metadata, Docker labels, Curate's public license files and documentation consistent.
+Current project source uses CC BY-NC 4.0. Describe it as source available for noncommercial use with attribution, not OSI open source or research-only. Preserve third-party licenses and earlier MIT permissions. Never rewrite historical release licensing or replace published artifacts; a future distribution of the license change needs a new version. Keep package metadata and documentation consistent.
+
+For SQL diagnostics, configure the shared Fyron console logger and use
+`FHIRSQLClient(log_queries=True)` for timed INFO activity and row/chunk counts.
+`SQLQueryError` provides controlled PostgreSQL-code-based troubleshooting hints.
+Never log SQL, bound values or remote database error text. Early stream closure
+is incomplete; failed batches must not be presented as successful partial results.
+No automatic retries or transaction rollback are implied.
+
+DICOM full-study folders retain hashes by default. `append_study_hash=False`
+uses exact explicit labels from `study_folder_name` / `study_folder_name_col`;
+reject unsafe labels and cross-study/case collisions before requests. The option
+works in single-study, DataFrame, alias and worker routes for DICOM/NIfTI.
+`write_completion_record=False` on DICOMDownloader disables per-series JSON;
+`save_study_manifest=False` separately disables the study summary. CLI equivalents
+are `--no-study-hash`, `--no-completion-record`, and `--no-study-manifest`.
+No-record reruns retain existing-file protection; explicit overwrite is required.
+Documents already support exact `document_id` / `id_col`, flat output and optional
+completion JSON. Do not add a second naming or token-cache implementation.
+
+Client reliability: keep DataFrame returns by default. DICOM and document batch
+methods optionally return `data` and `report.rows` / `report.summary` using
+`return_report=True`; task counts must remain distinct from series/file counts.
+DICOM exposes opt-in `request_timeout` and `parallel_job_timeout`; SQL exposes
+opt-in `statement_timeout` and `lock_timeout` in seconds on owned connections.
+SQL partition exports require matching query/config fingerprints and file digests
+for skips; preserve unverified files unless overwrite is explicit. Completion
+JSON remains optional. Documents accept optional `expected_content_types` and
+use bounded scheduling. Cancelled batches must raise, clean staging, preserve
+published files and report unfinished work honestly. Do not mutate or close
+borrowed HTTP sessions. Guard redirects per request and suppress upstream raw
+transport diagnostics only inside Fyron operations. GET retry policies can honor
+429/Retry-After; do not automatically retry writes, permission failures or SQL.
+
+The four client guides link to dedicated parameter subpages under FHIR REST,
+FHIR SQL, DICOMDownloader and DocumentDownloader. They enumerate every public
+client argument, default, keyword-only binding and operational choice. Signatures
+are generated from source by `scripts/generate_client_parameters.py`; update its
+behavior descriptions when changing client options. Run it with `--check` to
+verify synchronization. The documentation build regenerates these pages.

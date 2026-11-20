@@ -1,5 +1,62 @@
 # FHIR REST
 
+**Version scope:** Fyron 0.3.20b5 (Beta 5). Reporting, timeout, validation and naming additions described here require Beta 5 or newer.
+
+## Find the right operation
+
+Bring one FHIR search into a DataFrame, or use an existing table to drive the next searches. Keep the patient key explicit and inspect the extraction report before combining results with another dataset.
+
+**[All parameters, defaults and accepted options](rest/parameters.md)** · [Authentication](../../authentication/fhir-rest.md) · [Cohort walkthrough](../../onboarding/fhir-rest.md)
+
+| What you want | Use | Important controls |
+| --- | --- | --- |
+| Inspect one small query | `search_df` | `params`, `fhir_paths`, `max_pages` |
+| Query from a patient/encounter table | `query_df_from` / `search_df_from` | `column_map`, `param_prefix`, `include_column_map_columns` |
+| Extract a larger date range | `search_df_partitioned` | `partition_param`, `start`, `end`, `window_days` / `frequency` |
+| Process raw bundles yourself | `fetch_bundles` / `fetch_bundles_partitioned` | page limits, progress and worker deadlines |
+| Write a reviewed resource | `create_resource`, `update_resource`, `submit_bundle` | resource validation and explicit write intent |
+
+### Example: follow a patient table and retain its key
+
+Create your approved `auth` using the authentication chapter first. The service must support the chosen `subject` search. These are synthetic FHIR logical IDs, not medical-record numbers.
+
+```python
+import os
+import pandas as pd
+from dotenv import load_dotenv
+from fyron import FHIRRestClient
+from fyron.console import configure_logging
+
+load_dotenv(".env", override=False)
+configure_logging("INFO", color=True)
+cohort = pd.DataFrame({"patient_id": ["001", "002"]})
+
+with FHIRRestClient(
+    base_url=os.environ["FHIR_BASE_URL"], auth=auth,
+    num_processes=1, request_timeout=30, log_requests=True,
+) as client:
+    result = client.query_df_from(
+        df=cohort, resource_type="Observation",
+        column_map={"subject": "patient_id"},
+        param_prefix={"subject": "Patient/"},
+        include_column_map_columns=True,
+        params={"_count": 100}, max_pages=-1,
+        fhir_paths=[("observation_id", "id")],
+        use_multiprocessing=False, parallel_fetch=False,
+        show_progress=True, return_report=True,
+    )
+
+observations = result["data"]          # Includes original patient_id values
+query_rows = result["report"]["rows"]
+summary = result["report"]["summary"]
+# Inspect both report tables privately before treating the query as exhaustive.
+```
+
+**What changes when you change an option?** `parallel_fetch` controls request concurrency; `use_multiprocessing` controls bundle conversion. `max_pages` limits each input query, while `_count` requests a page size. `fhir_paths` selects resource-relative output fields and overrides a custom processor. `include_column_map_columns` retains original input values; it raises on column-name collisions.
+
+`params` contains server search parameters, not Fyron configuration. For example, `"subject"`, `"code"` and `"date"` depend on the resource/server. A missing match does not establish a clinical negative, and exhausted pagination cannot rule out a hidden server cap.
+
+
 For site-specific access setup, see [FHIR REST authentication](../../authentication/fhir-rest.md). Choose the method and permissions approved by your administrator.
 
 Development update: see [Safe Network Diagnostics](../../diagnostics.md) for logging,
@@ -831,3 +888,28 @@ pools, configured retries, and authentication. Sessions are not shared between
 workers or separate runs. Normal completion closes workers gracefully; failures
 and cancellation terminate the pool. This does not add task resubmission or
 change the distinction between HTTP timeouts and execution deadlines.
+
+## Progress, pagination and transport ownership
+
+Use `log_requests=True` with `fyron.console.configure_logging` for colored,
+controlled request timing and HTTP status events. URLs, tokens, request values
+and response bodies are never included. The compatibility flag
+`log_request_urls` emits controlled activity only; it does not print URLs.
+JSON logs retain structured metadata and terminal colors respect `NO_COLOR`.
+
+DataFrame extraction reports retain `queries`, `execution_complete`,
+`retrieval_exhaustive`, page limits and no-match counts. They additionally expose
+`executed_queries`, `not_requested` and `pagination_complete_queries`.
+`max_pages=0` is not an executed query. An exhausted page sequence is not proof
+of clinical completeness or absence of a hidden server cap. Failed extraction
+still raises rather than returning a successful partial table.
+
+Transient GETs use bounded retries, including HTTP 429 with `Retry-After`.
+`retries=Retry(...)` accepts an explicit urllib3 policy. An existing retry-capable
+session adapter retains its own policy rather than multiplying two retry loops.
+Permission denials and response-validation failures are not retried. Fyron does
+not configure retries for POST/PUT writes.
+
+A supplied session keeps its adapters, headers and response hooks. Fyron adds
+redirect checks and explicit headers per request, and does not close a borrowed
+session. Worker sessions remain owned and are closed by the worker lifecycle.

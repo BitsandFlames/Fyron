@@ -35,19 +35,15 @@ Linux, or other architecture compatibility. Python versions beyond this matrix
 are not certified by the `requires-python` lower bound.
 
 The 2026-10-21 local pre-release check passed 696 tests on Python 3.11, with
-two live-service integration tests intentionally skipped. Curate passed eight
-backend tests, two frontend batching tests, a frontend production build, and
-an isolated Docker upload/review/restart/export check with synthetic images
-and DICOM instances. Browser upload and review-state rendering were also checked.
-The final locked Python inventory and both npm lockfile inventories had no known
+two live-service integration tests intentionally skipped.
+The final locked Python inventory had no known
 advisories in the public advisory services queried on that date. This is dated
 evidence, not a guarantee that dependencies have no vulnerabilities.
 
 The wheel matrix exercises base and every declared extra on Python 3.12, plus
 radiomics and the combined all-extra environment on Python 3.11. Check the
 exact artifact's results before release. Hosted Linux and Windows Python results
-remain unverified for this working tree. The Docker check verifies Curate's
-Linux containers, not the complete Python scientific stack on Linux.
+remain unverified for this working tree.
 
 Use the CI run for the exact commit as the source of hosted results. A weekly run
 resolves package metadata in a fresh environment; the main suite uses `uv.lock`.
@@ -63,8 +59,7 @@ isolation; imports must resolve inside the environment's site-packages.
 
 Every extra has a synthetic operation: Excel round trips, model fitting, numerical
 summaries, plots, feature selection/explanation, image/SEG output, or mocked S3.
-Dependency-free aliases exercise their APIs too. Curate checks packaged assets
-and launcher configuration, not a live Docker deployment. Base platform tests
+Dependency-free aliases exercise their APIs too. Base platform tests
 explicitly exclude S3 tests; S3 has its own isolated gate. No remote clinical
 service or credentials are needed.
 
@@ -81,7 +76,6 @@ Known boundaries:
   workaround, not proof that an unassisted installation works. It adds no
   undeclared packages to the runtime environment. Bare installs remain unverified
   where an appropriate upstream wheel is unavailable.
-- Curate requires a separately available Docker runtime for actual operation.
 - Optional-extra probes are small operational checks, not exhaustive tests of
   every public function, provider, database, imaging geometry, or deployment.
 

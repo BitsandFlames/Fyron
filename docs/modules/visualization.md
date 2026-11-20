@@ -1,6 +1,6 @@
 # BOA Visualization
 
-`fyron.visualization` provides medical imaging figures for clinical review, reports, and publication figures. It includes BOA segmentation collages, CT/MR Curate preview preparation, and aligned CT/MR volume-difference heatmaps.
+`fyron.visualization` provides medical imaging figures for clinical review, reports, and publication figures. It includes BOA segmentation collages, CT/MR image preview preparation, and aligned CT/MR volume-difference heatmaps.
 
 For the combined BOA workflow overview, see [BOA](boa.md). For feature-table extraction from the same folders, see [BOA Extraction](boa-extraction.md). For local image I/O and normalization, see [Imaging](imaging.md).
 
@@ -33,10 +33,10 @@ from fyron.visualization import (
 
 | Topic | Contract |
 | --- | --- |
-| Input shape | BOA folder paths for BOA collages; arbitrary CT/segmentation NIfTI paths or arrays for generic segmentation collages; CT/MR image directories for Curate previews; NIfTI paths, `SimpleITK.Image`, or NumPy volumes for difference heatmaps. |
+| Input shape | BOA folder paths for BOA collages; arbitrary CT/segmentation NIfTI paths or arrays for generic segmentation collages; CT/MR image directories for image previews; NIfTI paths, `SimpleITK.Image`, or NumPy volumes for difference heatmaps. |
 | Required columns/files | Collages need image and segmentation volumes with matching shapes; heatmaps need two same-shape and same-geometry volumes. |
 | Return shape | Collage helpers write an image and return metadata; heatmaps return `(fig, axes, table)`. |
-| Saved artifacts | PNG collage/review images, Curate preview folders, CSV manifests, volume-difference figures, and slice-level difference summary tables. |
+| Saved artifacts | PNG collage/review images, image preview folders, CSV manifests, volume-difference figures, and slice-level difference summary tables. |
 | Failure modes | Missing files, incompatible geometry, unsupported orientation, invalid slice selection, failed image loading, or misleading comparisons without prior alignment. |
 
 ## Function Parameter Reference
@@ -116,12 +116,11 @@ All rendering parameters from `create_segmentation_collage` are forwarded. The r
 
 ### `prepare_curate_image_previews`
 
-For folder layouts and complete Bash/Python examples, see [Prepare your data for Curate](../applications/curate/prepare-data.md).
 
 | Parameter | Required | Default | Description |
 | --- | --- | --- | --- |
 | `input_dir` | yes | none | Directory containing CT/MRI volumes, DICOM series, or 2-D images. |
-| `output_dir` | yes | none | Curate-ready folder for PNG previews. |
+| `output_dir` | yes | none | Review-ready folder for PNG previews. |
 | `recursive` | no | `True` | Scan nested folders. |
 | `include_dicom` | no | `True` | Discover DICOM series below the input directory. |
 | `include_image_files` | no | `True` | Read NIfTI/MHA/NRRD and common 2-D raster files. |
@@ -245,9 +244,9 @@ summary[["case_id", "status", "output_path", "n_slices"]]
 
 Failed cases remain in the summary table with `status="error"` and an explanatory `message`, which makes large cohort runs easier to audit.
 
-## Curate Preview Preparation
+## Image Preview Preparation
 
-Use `prepare_curate_image_previews` when a folder of CT/MRI volumes should be turned into PNGs that can be dropped directly into Curate. 3-D volumes produce middle axial, coronal, and sagittal slices. 2-D images such as X-rays or topograms produce one preview.
+Use `prepare_curate_image_previews` to turn a folder of CT/MRI volumes into PNGs for image review. The function retains its existing API name. 3-D volumes produce middle axial, coronal, and sagittal slices. 2-D images such as X-rays or topograms produce one preview.
 
 ```python
 from fyron.visualization import prepare_curate_image_previews
@@ -269,13 +268,9 @@ The equivalent CLI command is:
 fyron dataset-curate-previews --input-dir /data/ct_exports --output-dir curate_previews
 ```
 
-After the previews are written, launch the review app and drop the generated folder into the **Add cohort** dialog:
-
-```bash
-# Start Curate separately: https://github.com/BitsandFlames/Curate
-```
-
-The generated `manifest.csv` is for traceability; Curate indexes the PNG files themselves and preserves their relative folder paths.
+Inspect the generated previews with your preferred image viewer. The generated
+`manifest.csv` maps previews to their source files for traceability. Protect
+this manifest as research data.
 
 ## Layer Configuration
 

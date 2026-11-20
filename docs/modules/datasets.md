@@ -264,7 +264,6 @@ Validation returns a DataFrame with `path`, `check`, `status`, and `message`.
 | Ultralytics YOLO | [Classification format](https://docs.ultralytics.com/datasets/classify/) · [Detection format](https://docs.ultralytics.com/datasets/detect/) | [ultralytics/ultralytics](https://github.com/ultralytics/ultralytics) |
 | Fyron | [Dataset preparation example](../examples/dataset-preparation.md) · [Imaging QC](imaging.md#imaging-qc-helpers) | [BitsandFlames/Fyron](https://github.com/BitsandFlames/Fyron) |
 
-For existing segmentation outputs, see [BOA CT and BOA MR](boa.md#upstream-tools-and-repositories). For image selection before dataset preparation, see [Curate](../applications/curate.md#review-workflow).
 
 ## Related Modules
 
@@ -275,4 +274,6 @@ For existing segmentation outputs, see [BOA CT and BOA MR](boa.md#upstream-tools
 
 ## Review prepared images
 
-Use [Curate data preparation](../applications/curate/prepare-data.md) for upload formats, folder layouts, and CT/MRI preview examples, then follow [Review & export](../applications/curate/review-export.md).
+Generate [image previews](visualization.md#image-preview-preparation) for visual
+inspection and retain the source mapping manifest. Preview images do not replace
+source-volume geometry checks or explicit cohort selection criteria.

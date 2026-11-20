@@ -1,5 +1,72 @@
 # DocumentDownloader
 
+**Version scope:** Fyron 0.3.20b5 (Beta 5). Reporting, timeout, validation and naming additions described here require Beta 5 or newer.
+
+## Find the right operation
+
+Download approved document URLs into predictable files and keep an outcome table alongside them. General downloads preserve response bytes; filename extensions do not convert text to PDF or validate document content.
+
+**[All parameters, defaults and accepted options](downloader/parameters.md)** · [Authentication](../../authentication/documents.md) · [Hands-on walkthrough](../../onboarding/documents.md)
+
+| What you want | Use | Important controls |
+| --- | --- | --- |
+| One document | `download_url` | optional `document_id` or exact `output_path` |
+| A list of URLs | `download_urls` | worker count, optional report/CSV |
+| A CSV/DataFrame manifest | `download_from_dataframe` / `download_from_df` | `url_col`, `id_col` |
+| Exact filenames in one folder | constructor plus custom IDs | `flat_output=True` and `document_id` / `id_col` |
+| PDF endpoint checks | constructor | `require_pdf=True`, redirect policy |
+| Text or selected response types | constructor | `expected_content_types=["text/plain"]` |
+| No new JSON sidecars | constructor | `write_completion_record=False` |
+
+### Example: CSV URLs, custom IDs and one output folder
+
+Create `auth` using the approved service recipe. Save a synthetic input CSV like this, then replace the URLs with reviewed service inputs before running:
+
+```csv
+document_url,document_id
+https://documents.example.org/reports/one.pdf,00123
+https://documents.example.org/reports/two.pdf,00124
+```
+
+```python
+import pandas as pd
+from fyron import DocumentDownloader
+from fyron.console import configure_logging
+
+configure_logging("INFO", color=True)
+documents = pd.read_csv("documents.csv", dtype="string")
+with DocumentDownloader(
+    auth=auth, output_dir="documents_out",
+    flat_output=True, write_completion_record=False,
+    require_pdf=True, allow_redirects=False, timeout=90,
+    max_workers=4, log_downloads=True,
+) as loader:
+    result = loader.download_from_dataframe(
+        df=documents, url_col="document_url", id_col="document_id",
+        results_csv="results/documents.csv",
+        return_report=True, show_progress=True,
+    )
+
+files = result["data"]  # Includes document_id, actual path, HTTP status and errors
+summary = result["report"]["summary"]
+failed = files.loc[files["error"].notna()]
+```
+
+The files are `documents_out/00123.pdf` and `documents_out/00124.pdf`. IDs stay strings, including leading zeros. For plain text, use `require_pdf=False` and `expected_content_types=["text/plain"]`; for mixed types, allow an explicit MIME list and choose an appropriate validation policy.
+
+| Naming/validation control | What it changes | What it does not establish |
+| --- | --- | --- |
+| `document_id` / `id_col` | Exact automatic base filename | Does not change the URL-hash download_id in results |
+| `flat_output` | One output folder instead of per-document folders | Does not authorize overwriting existing files |
+| `output_path` | Exact destination for a single URL | Does not bypass validation or collision protection |
+| `save_mode` / `force_extension` | Filename suffix | Does not convert file contents |
+| `require_pdf` | Status, MIME type and PDF signature checks | Does not validate all PDF syntax or clinical correctness |
+| `expected_content_types` | Allowed response MIME types | Does not guarantee the body is well-formed |
+| `write_completion_record` | Whether new completion JSON is saved | Does not affect the separate OIDC token cache |
+
+Keep completion records enabled for verified restarts. With them disabled, an unverified existing file is preserved and reported as a conflict; use `skip_existing=False` only for an intentional replacement. The Python downloader can inherit FHIR authentication environment settings when no auth is supplied, while the document CLI defaults to explicit anonymous access.
+
+
 For site-specific access setup, see [Document authentication](../../authentication/documents.md). Choose the method and permissions approved by your administrator.
 
 Download PDF and plain-text documents from individual URLs or cohort tables.
@@ -458,39 +525,23 @@ loader = DocumentDownloader(
 
 ### Constructor Parameters
 
-| Parameter | Required | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `auth` | no | `Auth | requests.Session | None` | `None` | Reuse Fyron auth/session. |
-| `base_url` | no | `str | None` | env `FHIR_BASE_URL` | Prefix for relative URLs. |
-| `output_dir` | no | `str | Path` | `"documents_out"` | Parent folder for downloads. |
-| `timeout` | no | `float` | `30` | Positive finite request timeout in seconds. |
-| `skip_existing` | no | `bool` | `True` | Skip only verified downloads; False permits replacement. |
-| `log_downloads` | no | `bool` | `False` | Log each download. |
-| `max_workers` | no | `int` | `4` | Thread workers for URL lists/DataFrames. |
-| `retries` | no | `urllib3 Retry | None` | default retry policy | Custom retry behavior. |
-| `save_mode` | no | `str` | `"auto"` | Save behavior: auto/text/PDF style handling. |
-| `force_extension` | no | `str | None` | `None` | Force a file extension. |
-| `basic_auth` | no | `(str, str) | None` | `None` | Standalone basic auth tuple. |
-| `require_pdf` | no | `bool` | `False` | Keyword-only: require HTTP 200, PDF media type, and PDF signature. |
-| `allow_redirects` | no | `bool` | `True` | Keyword-only: follow only guarded same-origin redirects; False rejects redirects. |
-| `write_completion_record` | no | `bool` | `True` | Keyword-only: write a hidden JSON record for verified skips; False saves the document without a new record. |
-| `flat_output` | no | `bool` | `False` | Keyword-only: save directly in the output directory with URL-hash filenames and absolute result paths. Explicit `output_path` takes precedence. |
+[Complete constructor parameters](downloader/parameters.md#constructor) lists all arguments, actual defaults, types and accepted options.
+
+
 
 ## `download_url`
 
-Downloads one URL into a deterministic folder based on URL hash.
+Downloads one URL using automatic hash/custom-ID naming or an explicit destination.
 
 ```python
 result = loader.download_url("https://example.org/report_001.pdf")
 ```
 
-| Parameter | Required | Description |
-| --- | --- | --- |
-| `url` | yes | Absolute URL or relative URL when `base_url` is set. |
-| `output_path` | no | Keyword-only exact file destination; omit for automatic naming. |
-| `document_id` | no | Keyword-only custom string/integer ID; omit to retain URL-hash naming. |
+[Every download_url parameter](downloader/parameters.md#download-url) lists all arguments, actual defaults, types and accepted options.
+
 
 Returns a `DocumentResult` with URL, local path, status, content type, hash, and error metadata.
+
 
 ## `download_urls`
 
@@ -506,12 +557,11 @@ results = loader.download_urls(
 )
 ```
 
-| Parameter | Required | Default | Description |
-| --- | --- | --- | --- |
-| `urls` | yes | none | Iterable of URLs. |
-| `results_csv` | no | `None` | Optional CSV path for results. |
+[Every download_urls parameter](downloader/parameters.md#download-urls) lists all arguments, actual defaults, types and accepted options.
 
-Returns a DataFrame of download results.
+
+Returns a DataFrame by default; `return_report=True` adds task rows and a summary.
+
 
 ## `download_from_df`
 
@@ -525,14 +575,11 @@ results = loader.download_from_df(
 )
 ```
 
-| Parameter | Required | Default | Description |
-| --- | --- | --- | --- |
-| `df` | yes | none | Input DataFrame. |
-| `url_col` | no | `"document_url"` | Column containing URLs. |
-| `id_col` | no | `None` | Keyword-only column containing custom document IDs; supported by both DataFrame methods. |
-| `results_csv` | no | `None` | Optional output CSV. |
+[Every DataFrame parameter](downloader/parameters.md#download-from-dataframe) and [alias parameters](downloader/parameters.md#download-from-df) lists all arguments, actual defaults, types and accepted options.
+
 
 `download_from_dataframe` is the same method under the longer name.
+
 
 ## Static Helper: `download_id`
 
@@ -559,3 +606,92 @@ separately, as in the nested context managers above.
 - Use `skip_existing=True` to make download jobs restartable.
 - Use `basic_auth` or `auth`, not both.
 - Use `force_extension=".pdf"` only when the server does not provide useful filenames/content types.
+
+## Custom names without hash folders or completion JSON
+
+Documents already support exact custom names; no `append_study_hash` option is
+needed. Use `document_id="00123"` for one URL, or `id_col="ACC_NR"` for a table.
+With `flat_output=True`, the file is `documents_out/00123.pdf`. With flat output
+disabled it is `documents_out/00123/00123.pdf`. Without a custom ID, URL-hash
+naming remains the default. Explicit `output_path` takes precedence.
+
+```python
+from fyron import DocumentDownloader
+
+with DocumentDownloader(
+    auth=auth,
+    output_dir="documents_out",
+    flat_output=True,
+    write_completion_record=False,
+    require_pdf=True,
+    allow_redirects=False,
+    timeout=90,
+) as loader:
+    results = loader.download_from_dataframe(
+        documents, url_col="document_url", id_col="ACC_NR",
+        results_csv="results/documents.csv",
+    )
+```
+
+Here `documents` is your reviewed DataFrame with `document_url` and unique
+`ACC_NR` strings. Keep leading zeros when reading CSV. The results include the
+actual `path`; the internal `download_id` remains the URL hash, not the filename.
+`write_completion_record=False` omits new document completion JSON, independently
+of the sensitive authentication token cache. Existing unverified files remain
+protected; an intentional replacement requires `skip_existing=False`.
+
+CLI equivalents are `--id-col ACC_NR --flat-output --no-completion-record`.
+For general text downloads, omit `require_pdf=True` / `--pdf`; choose validation
+appropriate to your endpoint.
+
+## Content validation, ordered reports and bounded batches
+
+For text/report endpoints, optionally restrict MIME types:
+
+```python
+with DocumentDownloader(
+    auth=auth, output_dir="documents_out",
+    expected_content_types=["text/plain"], max_workers=4,
+) as loader:
+    result = loader.download_from_dataframe(
+        documents, url_col="document_url", id_col="document_id",
+        return_report=True, show_progress=True,
+        results_csv="results/documents.csv",
+    )
+    data = result["data"]
+    summary = result["report"]["summary"]
+```
+
+Types are exact MIME types, compared case-insensitively without response charset
+parameters. Unexpected HTML is rejected before publication. MIME checking does
+not validate the full document syntax or clinical contents. `require_pdf=True`
+also requires an HTTP 200 PDF and `%PDF-` signature. Validation policy is bound
+to completion records, so changing it cannot silently reuse an older skip.
+The CLI equivalent is `--content-type text/plain`; repeat it to allow more types.
+Invalid type settings are rejected before CLI authentication.
+
+`return_report=True` is available on `download_urls`, `download_from_dataframe`
+and `download_from_df`. It returns `data` and `report.rows` / `report.summary`
+DataFrames; the default remains the original result DataFrame. Results and
+report task ordinals follow input order in sequential and parallel execution.
+Reports distinguish requested, completed, successful, failed and skipped tasks.
+Empty input has a stable result schema. Request URLs and actual file paths stay
+in the sensitive `data` output, not progress messages.
+
+The scheduler keeps at most twice the worker count pending. Cancellation stops
+new scheduling, cancels queued tasks and waits for running HTTP operations to
+finish under their configured request timeout. It does not force-kill Python
+threads or promise instant cancellation. Already published files remain intact;
+a requested result CSV retains available completed outcomes. A cancelled batch
+raises rather than returning a successful report.
+
+Transient GETs use bounded retries, including HTTP 429 and `Retry-After`.
+Authentication denials and validation failures are not automatically retried.
+Borrowed sessions retain their adapters, headers and hooks; a retry-capable
+caller adapter keeps its own policy. Result CSV publication is atomic and cannot
+replace a downloaded document or client completion metadata.
+
+For Python, configure `fyron.console.configure_logging` and `log_downloads=True`
+for colored timing/status output, or JSON logging for schedulers. Progress bars
+are opt-in with `show_progress=True`. CLI quiet, JSON-log and no-progress modes
+disable bars. All displayed diagnostics are controlled; remote text is excluded.

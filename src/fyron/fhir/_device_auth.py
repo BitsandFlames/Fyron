@@ -15,6 +15,7 @@ from pathlib import Path
 from urllib.parse import quote, urljoin, urlsplit
 
 import requests
+from .._http import private_transport
 from requests.auth import AuthBase
 from requests.utils import rewind_body
 
@@ -404,6 +405,7 @@ class _DeviceAuth(_BearerAuth):
             if os.path.exists(name):
                 os.unlink(name)
 
+    @private_transport
     def get_token(self, rejected=None):
         with self._lock, self._cache_lock():
             self._load()

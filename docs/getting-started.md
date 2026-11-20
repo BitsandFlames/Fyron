@@ -1,5 +1,7 @@
 # Getting Started
 
+New to a cohort workflow? Follow the [hands-on Onboarding chapter](onboarding/index.md) for complete REST, SQL, DICOMweb and document-download exercises with result checkpoints.
+
 For site-specific access setup, see [Authentication](authentication/index.md). Choose the method and permissions approved by your administrator.
 
 This page walks through the smallest useful Fyron workflow: install the package, choose the right interface, query a FHIR server, shape a patient-level cohort, create a descriptive table or plot, and write a provenance record. Treat it as a smoke test before connecting to private systems or larger datasets.

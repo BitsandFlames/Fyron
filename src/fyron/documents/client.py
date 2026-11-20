@@ -14,9 +14,10 @@ import os
 import pathlib
 import threading
 import tempfile
-from concurrent.futures import ThreadPoolExecutor, as_completed
+import time
+from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
 from dataclasses import dataclass, fields
-from typing import Dict, Iterable, List, Optional, Tuple, Union
+from typing import Dict, Iterable, List, Optional, Tuple, Union, Sequence
 
 import pandas as pd
 import requests
@@ -27,12 +28,33 @@ from urllib.parse import urlsplit
 
 from ..fhir.auth import Auth
 from .._completion import verified_files, publish_files
+from .._http import get_with_retry, default_retries, private_transport, check_cancelled
+from .._client_io import atomic_csv, task_row, extraction_report
+from tqdm import tqdm
 
 logger = logging.getLogger(__name__)
 
 
 class DocumentDownloadError(RuntimeError):
     """Raised when a document download fails."""
+
+
+_DOCUMENT_HINTS = {
+    "content": "Unexpected document content type; check the endpoint and authentication.",
+    "pdf": "Expected an HTTP 200 PDF response; check the endpoint, authentication and content type.",
+    "signature": "The response has no PDF signature; it may be a login page or invalid document.",
+    "length": "Document response length mismatch; transfer interrupted or server length incorrect. Existing files were preserved.",
+    "destination": "Document filename must stay inside its chosen output directory.",
+}
+
+
+class _DocumentValidationError(DocumentDownloadError):
+    def __init__(self, reason):
+        self.reason = reason
+        super().__init__(_DOCUMENT_HINTS[reason])
+
+    def __reduce__(self):
+        return type(self), (self.reason,)
 
 
 @dataclass
@@ -66,7 +88,7 @@ class DocumentDownloader:
     skip_existing:
         Skip downloads if the target file already exists.
     log_downloads:
-        If True, logs each download.
+        Emit controlled timing, status and count events; never log URLs or content.
     require_pdf:
         Require HTTP 200, application/pdf content type, and a PDF header.
     allow_redirects:
@@ -74,8 +96,10 @@ class DocumentDownloader:
     write_completion_record:
         Write a hidden JSON record for verified restarts. If False, newly saved
         files cannot be skipped on subsequent runs without an existing valid record.
+    expected_content_types:
+        Optional exact MIME types permitted for downloads, e.g. ["text/plain"].
     flat_output:
-        Save documents directly in output_dir using URL-hash filenames. Results
+        Save documents directly in output_dir using custom IDs or default URL hashes. Results
         contain absolute paths. Explicit output_path takes precedence.
     """
 
@@ -97,10 +121,12 @@ class DocumentDownloader:
         allow_redirects: bool = True,
         write_completion_record: bool = True,
         flat_output: bool = False,
+        expected_content_types: Optional[Sequence[str]] = None,
     ) -> None:
         """Initialize the document downloader."""
         if isinstance(timeout, bool) or not math.isfinite(timeout) or timeout <= 0:
             raise ValueError("timeout must be a positive finite number.")
+        self.expected_content_types = _normalize_content_types(expected_content_types, require_pdf)
         self.base_url = base_url or os.environ.get("FHIR_BASE_URL")
         self.output_dir = pathlib.Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
@@ -145,19 +171,11 @@ class DocumentDownloader:
                 self.session = requests.Session()
                 self._close_session_on_exit = True
 
-        from .._http import guard_redirects
-        guard_redirects(self.session)
-        if retries is None:
-            retries = Retry(
-                total=3,
-                backoff_factor=0.5,
-                status_forcelist=[502, 503, 504],
-                allowed_methods=["GET"],
-                raise_on_status=False,
-            )
-        adapter = HTTPAdapter(max_retries=retries)
-        self.session.mount("http://", adapter)
-        self.session.mount("https://", adapter)
+        self._retries = retries if retries is not None else default_retries()
+        if self._close_session_on_exit:
+            adapter = HTTPAdapter(max_retries=self._retries)
+            self.session.mount("http://", adapter)
+            self.session.mount("https://", adapter)
 
     def __enter__(self) -> "DocumentDownloader":
         """Return self for context manager usage."""
@@ -179,6 +197,7 @@ class DocumentDownloader:
         """Return a deterministic download ID for a URL."""
         return hashlib.sha256(url.encode()).hexdigest()
 
+    @private_transport
     def download_url(
         self, url: str, *, output_path: Optional[Union[str, pathlib.Path]] = None,
         document_id: Optional[Union[str, int]] = None,
@@ -223,29 +242,39 @@ class DocumentDownloader:
                                f":pdf={self.require_pdf}:redirects={self.allow_redirects}")
         if document_id is not None:
             completion_key += f":id={chosen_id}"
+        if self.expected_content_types is not None:
+            completion_key += ":content=" + ",".join(sorted(self.expected_content_types))
         existing = verified_files(target_dir, completion_key) if self.skip_existing else []
         if existing:
             if self.log_downloads:
-                event(logger, "documents", "activity", level=logging.DEBUG)
+                event(logger, "documents", "finished", skipped=1, unit="document")
             return DocumentResult(full_url, download_id, str(existing[0]), None, None, skipped=True, document_id=chosen_id)
 
         status = None
         content_type = None
+        started = time.monotonic()
+        if self.log_downloads:
+            event(logger, "documents", "started")
         try:
             target_dir.mkdir(parents=True, exist_ok=True)
             if self.log_downloads:
                 event(logger, "documents", "activity", level=logging.DEBUG)
             headers = {"Accept": "application/pdf"} if self.require_pdf else {}
-            with self.session.get(full_url, stream=True, timeout=self.timeout,
+            cancellation = getattr(self._batch_state, "cancel_event", None)
+            with get_with_retry(self.session, full_url, retries=self._retries, cancel_event=cancellation,
+                                stream=True, timeout=self.timeout,
                                   headers=headers, allow_redirects=self.allow_redirects) as resp:
                 status = resp.status_code
                 resp.raise_for_status()
                 if not 200 <= status < 300:
                     raise ValueError("Document response did not succeed.")
                 content_type = resp.headers.get("Content-Type")
+                media_type = (content_type or "").split(";", 1)[0].strip().lower()
+                if self.expected_content_types is not None and media_type not in self.expected_content_types:
+                    raise _DocumentValidationError("content")
                 if self.require_pdf and (status != 200 or
                         (content_type or "").split(";", 1)[0].strip().lower() != "application/pdf"):
-                    raise ValueError("Document response is not an HTTP 200 PDF.")
+                    raise _DocumentValidationError("pdf")
                 ext = _extension_from_content_type(content_type)
                 if output_path is None:
                     target_path = _resolve_target_path(
@@ -256,30 +285,32 @@ class DocumentDownloader:
                         force_extension=self.force_extension,
                     )
                 if target_path.parent != target_dir or target_path.name in {"", ".", ".."}:
-                    raise ValueError("Document filename must stay within its destination.")
+                    raise _DocumentValidationError("destination")
                 hasher = hashlib.sha256()
                 with tempfile.TemporaryDirectory(prefix=".fyron-stage-", dir=target_dir) as staging:
                     size = 0
                     prefix = b""
                     with open(pathlib.Path(staging) / target_path.name, "wb") as f:
                         for chunk in resp.iter_content(chunk_size=1024 * 1024):
+                            check_cancelled(cancellation)
                             if chunk:
                                 if self.require_pdf and len(prefix) < 5:
                                     prefix += chunk[:5 - len(prefix)]
                                     if len(prefix) == 5 and prefix != b"%PDF-":
-                                        raise ValueError("Document has no PDF header.")
+                                        raise _DocumentValidationError("signature")
                                 f.write(chunk)
                                 hasher.update(chunk)
                                 size += len(chunk)
                         f.flush()
                         os.fsync(f.fileno())
                     if self.require_pdf and prefix != b"%PDF-":
-                        raise ValueError("Document has no PDF header.")
+                        raise _DocumentValidationError("signature")
                     length = resp.headers.get("Content-Length")
                     if length is not None and not resp.headers.get("Content-Encoding") and size != int(length):
-                        raise ValueError("Document response length mismatch.")
+                        raise _DocumentValidationError("length")
                     # Serialize publication within this client, including duplicate
                     # URLs submitted concurrently. Downloads themselves stay parallel.
+                    check_cancelled(cancellation)
                     with self._download_lock:
                         # Different IDs can still resolve to the same filename,
                         # e.g. "report" and "report.pdf" for PDF responses.
@@ -314,21 +345,47 @@ class DocumentDownloader:
                 status = getattr(response, "status_code", None)
             error_event(logger, "documents", exc)
             message = ("Existing output is unverified; review it before using skip_existing=False."
-                       if isinstance(exc, FileExistsError) else safe_error(exc))
+                       if isinstance(exc, FileExistsError) else
+                       (_DOCUMENT_HINTS[exc.reason] if isinstance(exc, _DocumentValidationError) else safe_error(exc)))
             return DocumentResult(full_url, download_id, str(target_path), status, content_type, None, message, document_id=chosen_id)
+        finally:
+            if self.log_downloads:
+                event(logger, "documents", "finished" if 'message' not in locals() else "failed",
+                      elapsed_s=time.monotonic() - started, http_status=status)
 
     def download_urls(
         self,
         urls: Iterable[str],
         results_csv: Optional[Union[str, pathlib.Path]] = None,
-    ) -> pd.DataFrame:
-        """Download a list of URLs and return results as a DataFrame."""
+        *,
+        return_report: bool = False,
+        show_progress: bool = False,
+    ) -> Union[pd.DataFrame, Dict[str, object]]:
+        """Download a list of URLs.
+
+        Parameters
+        ----------
+        urls:
+            Iterable of approved document URLs.
+        results_csv:
+            Optional CSV output, published atomically after downloads.
+        return_report:
+            Return data plus per-task rows and summary tables when True.
+        show_progress:
+            Display completed-document progress; default False.
+
+        Returns
+        -------
+        pandas.DataFrame or dict
+            Download results, or data plus controlled task reports.
+        """
         url_list = list(urls)
         df = pd.DataFrame({"document_url": url_list})
         return self.download_from_dataframe(
             df=df,
             url_col="document_url",
             results_csv=results_csv,
+            return_report=return_report, show_progress=show_progress,
         )
 
     @batch_report("documents")
@@ -339,7 +396,9 @@ class DocumentDownloader:
         results_csv: Optional[Union[str, pathlib.Path]] = None,
         *,
         id_col: Optional[str] = None,
-    ) -> pd.DataFrame:
+        return_report: bool = False,
+        show_progress: bool = False,
+    ) -> Union[pd.DataFrame, Dict[str, object]]:
         """Download all URLs from a DataFrame column.
 
         Parameters
@@ -353,6 +412,11 @@ class DocumentDownloader:
         id_col:
             Optional column of unique filename-safe string or integer IDs.
             Omit to retain URL-hash naming. IDs are validated before requests.
+
+        return_report:
+            Return data plus per-task rows and summary tables when True.
+        show_progress:
+            Display completed-document progress; default False.
 
         Returns
         -------
@@ -368,30 +432,85 @@ class DocumentDownloader:
         urls = [self._resolve_url(url) for url in df[url_col].tolist()]
         ids = _document_ids(df, id_col)
         destinations = {}
-        results: List[DocumentResult] = []
-        if self.log_downloads:
-            event(logger, "documents", "activity", level=logging.DEBUG)
-        if self.max_workers > 1:
-            with ThreadPoolExecutor(max_workers=self.max_workers) as ex:
-                futures = [ex.submit(self._download_batch_url, url, identifier, destinations)
-                           for url, identifier in zip(urls, ids)]
-                for fut in as_completed(futures):
-                    result = fut.result()
-                    results.append(result)
-                    completed_task([result])
-        else:
-            for url, identifier in zip(urls, ids):
-                result = self._download_batch_url(url, identifier, destinations)
-                results.append(result)
-                completed_task([result])
-        out = pd.DataFrame([r.__dict__ for r in results], columns=[f.name for f in fields(DocumentResult)])
-        if results_csv:
-            report = pathlib.Path(results_csv).resolve()
-            if any(report == pathlib.Path(path).resolve() for path in out["path"]):
-                raise ValueError("Result report would overwrite a document.")
-            pathlib.Path(results_csv).parent.mkdir(parents=True, exist_ok=True)
-            out.to_csv(results_csv, index=False)
-        return out
+        results = {}
+        cancellation = threading.Event()
+        rows = []
+        progress = tqdm(total=len(urls), desc="Documents", unit="document", disable=not show_progress)
+        def execute(number):
+            started = time.monotonic()
+            self._batch_state.cancel_event = cancellation
+            try:
+                item = self._download_batch_url(urls[number], ids[number], destinations)
+                return number, item, time.monotonic() - started
+            finally:
+                del self._batch_state.cancel_event
+        def record(value):
+            number, item, elapsed = value
+            results[number] = item
+            rows.append(task_row(number, [item], elapsed))
+            completed_task([item])
+            progress.update(1)
+        def result_frame():
+            return pd.DataFrame([results[n].__dict__ for n in sorted(results)],
+                                columns=[f.name for f in fields(DocumentResult)])
+        pool = None
+        pending = set()
+        submitted = set()
+        interrupted = False
+        try:
+            if self.max_workers > 1 and urls:
+                pool = ThreadPoolExecutor(max_workers=self.max_workers)
+                numbers = iter(range(len(urls)))
+                for _ in range(min(self.max_workers * 2, len(urls))):
+                    pending.add(pool.submit(execute, next(numbers)))
+                submitted.update(pending)
+                while pending:
+                    done, pending = wait(pending, return_when=FIRST_COMPLETED)
+                    for future in done:
+                        record(future.result())
+                        submitted.discard(future)
+                        number = next(numbers, None)
+                        if number is not None:
+                            future = pool.submit(execute, number)
+                            pending.add(future)
+                            submitted.add(future)
+            else:
+                for number in range(len(urls)):
+                    record(execute(number))
+        except BaseException:
+            interrupted = True
+            cancellation.set()
+            for future in pending:
+                future.cancel()
+            event(logger, "documents", "incomplete", completed=len(results),
+                  unfinished=len(urls) - len(results))
+            raise
+        finally:
+            if pool is not None:
+                # Running HTTP requests finish under their existing request timeout.
+                # Queued tasks are cancelled; never leave background publication running.
+                pool.shutdown(wait=True, cancel_futures=True)
+                if interrupted:
+                    for future in submitted:
+                        if not future.cancelled():
+                            try:
+                                value = future.result()
+                                if value[0] not in results:
+                                    record(value)
+                            except BaseException:
+                                pass
+            progress.close()
+            if results_csv:
+                try:
+                    atomic_csv(result_frame(), results_csv,
+                               forbidden=[item.path for item in results.values()])
+                except Exception:
+                    if not interrupted:
+                        raise
+                    event(logger, "documents", "warning")
+        out = result_frame()
+        report = extraction_report(rows, len(urls), len(df))
+        return {"data": out, "report": report} if return_report else out
 
     def _download_batch_url(self, url, identifier, destinations):
         self._batch_state.destinations = destinations
@@ -407,7 +526,9 @@ class DocumentDownloader:
         results_csv: Optional[Union[str, pathlib.Path]] = None,
         *,
         id_col: Optional[str] = None,
-    ) -> pd.DataFrame:
+        return_report: bool = False,
+        show_progress: bool = False,
+    ) -> Union[pd.DataFrame, Dict[str, object]]:
         """Short alias for download_from_dataframe.
 
         Parameters
@@ -422,6 +543,11 @@ class DocumentDownloader:
             Optional column of unique filename-safe string or integer IDs.
             Omit to retain URL-hash naming. IDs are validated before requests.
 
+        return_report:
+            Return data plus per-task rows and summary tables when True.
+        show_progress:
+            Display completed-document progress; default False.
+
         Returns
         -------
         pd.DataFrame
@@ -429,12 +555,26 @@ class DocumentDownloader:
             actual path, status, hash, and controlled errors. Parallel results
             may arrive in completion order.
         """
-        return self.download_from_dataframe(df=df, url_col=url_col, results_csv=results_csv, id_col=id_col)
+        return self.download_from_dataframe(df=df, url_col=url_col, results_csv=results_csv, id_col=id_col,
+            return_report=return_report, show_progress=show_progress)
 
     def _resolve_url(self, url: str) -> str:
         """Resolve relative URLs against base_url."""
         return _resolve_document_url(url, self.base_url)
 
+
+
+def _normalize_content_types(values, require_pdf=False):
+    if values is None:
+        return None
+    if isinstance(values, str) or any(not isinstance(value, str) for value in values):
+        raise ValueError("expected_content_types must be a sequence of MIME types.")
+    result = tuple(sorted({value.strip().lower() for value in values}))
+    if not result or any(not re.fullmatch(r"[a-z0-9!#$&^_.+-]+/[a-z0-9!#$&^_.+-]+", value) for value in result):
+        raise ValueError("Expected content types must be explicit MIME types, e.g. text/plain.")
+    if require_pdf and "application/pdf" not in result:
+        raise ValueError("PDF validation conflicts with the expected content types.")
+    return result
 
 def _validate_document_id(value) -> str:
     if isinstance(value, bool) or not isinstance(value, (str, numbers.Integral)):

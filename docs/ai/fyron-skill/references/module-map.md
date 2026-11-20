@@ -12,8 +12,7 @@ Use this table to choose the first public API to inspect.
 | DICOM SEG | `fyron.dicom.seg` | `fyron dicom-seg`, `/modules/dicom/seg/` |
 | Local DICOM/NIfTI image I/O | `fyron.imaging` | `/modules/imaging/` |
 | Image geometry and mask QC | `fyron.imaging.qc`, `fyron.imaging.segmentation` | `fyron imaging-qc` |
-| Curate preview PNGs | `fyron.visualization.prepare_curate_image_previews` | `fyron dataset-curate-previews` |
-| Curate app | [standalone repository](https://github.com/BitsandFlames/Curate) | Docker Compose; `/applications/curate/` |
+| Image preview PNGs | `fyron.visualization.prepare_curate_image_previews` | `fyron dataset-curate-previews` |
 | BOA feature extraction | `fyron.boa_extraction` | `fyron boa-extract` |
 | BOA radiomics | `fyron.boa_radiomics` | `fyron boa-radiomics` |
 | BOA figures and collages | `fyron.visualization` | `/modules/visualization/` |

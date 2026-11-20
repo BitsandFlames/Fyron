@@ -130,7 +130,11 @@ def _add_dicom_download_parser(sub: argparse._SubParsersAction) -> None:
     p.add_argument("--study-layout", choices=("hierarchical", "flat"), default="hierarchical")
     p.add_argument("--study-folder-name", default=None)
     p.add_argument("--study-folder-col", default=None)
+    p.add_argument("--request-timeout", type=float, default=None)
+    p.add_argument("--parallel-job-timeout", type=float, default=None)
     p.add_argument("--no-study-manifest", action="store_true")
+    p.add_argument("--no-study-hash", action="store_true", help="Use exact unique study-folder labels")
+    p.add_argument("--no-completion-record", action="store_true", help="Omit per-series JSON completion records")
     p.add_argument("--results-csv", default=None)
     p.set_defaults(func=_cmd_dicom_download)
 
@@ -363,49 +367,57 @@ def _cmd_fhir_build_bundle(args: argparse.Namespace) -> int:
 
 def _cmd_dicom_download(args: argparse.Namespace) -> int:
     from fyron.dicom import DICOMDownloader
+    from fyron._diagnostics import event
+    import logging
 
     if not args.dicom_web_url:
         raise SystemExit("DICOM_WEB_URL is required or pass --dicom-web-url.")
     downloader = DICOMDownloader(
-        dicom_web_url=args.dicom_web_url,
-        dicom_user=args.dicom_user,
-        dicom_password=args.dicom_password,
-        output_format=args.output_format,
-        use_compression=args.compression,
-        num_processes=args.processes,
+        dicom_web_url=args.dicom_web_url, dicom_user=args.dicom_user,
+        dicom_password=args.dicom_password, output_format=args.output_format,
+        use_compression=args.compression, num_processes=args.processes,
+        append_study_hash=not args.no_study_hash,
+        write_completion_record=not args.no_completion_record,
+        request_timeout=args.request_timeout, parallel_job_timeout=args.parallel_job_timeout,
     )
-    if args.csv:
-        results = downloader.download_from_dataframe(
-            df=pd.read_csv(args.csv),
-            output_dir=args.output_dir,
-            study_uid_col=args.study_col,
-            series_uid_col=args.series_col,
-            download_full_study=args.full_study,
-            skip_existing=args.skip_existing,
-            write_manifest=args.manifest,
-            study_layout=args.study_layout,
-            study_folder_name_col=args.study_folder_col,
-            save_study_manifest=False if args.no_study_manifest else None,
-            results_csv=args.results_csv,
-        )
-        _emit(args, str(results))
-        return 0
-    if not args.study_uid:
-        raise SystemExit("Provide --study-uid or --csv.")
-    if args.series_uid:
-        _emit(args, str(downloader.download_series(args.study_uid, args.series_uid, args.output_dir, skip_existing=args.skip_existing)), outputs=[args.output_dir])
-    else:
-        for result in downloader.download_study(
-            args.study_uid,
-            args.output_dir,
-            skip_existing=args.skip_existing,
-            write_manifest=args.manifest,
-            study_layout=args.study_layout,
-            study_folder_name=args.study_folder_name,
-            save_study_manifest=False if args.no_study_manifest else None,
-        ):
-            _emit(args, str(result))
-    return 0
+    try:
+        if args.csv:
+            results = downloader.download_from_dataframe(
+                df=pd.read_csv(args.csv, dtype="string"), output_dir=args.output_dir,
+                study_uid_col=args.study_col, series_uid_col=args.series_col,
+                download_full_study=args.full_study, skip_existing=args.skip_existing,
+                write_manifest=args.manifest, study_layout=args.study_layout,
+                study_folder_name_col=args.study_folder_col,
+                save_study_manifest=False if args.no_study_manifest else None,
+                results_csv=args.results_csv,
+                show_progress=not (args.no_progress or args.quiet or args.json_log),
+            )
+        else:
+            if not args.study_uid:
+                raise SystemExit("Provide --study-uid or --csv.")
+            if args.series_uid:
+                items = [downloader.download_series(args.study_uid, args.series_uid, args.output_dir,
+                                                    skip_existing=args.skip_existing)]
+            else:
+                items = downloader.download_study(args.study_uid, args.output_dir,
+                    skip_existing=args.skip_existing, write_manifest=args.manifest,
+                    study_layout=args.study_layout, study_folder_name=args.study_folder_name,
+                    save_study_manifest=False if args.no_study_manifest else None)
+            results = pd.DataFrame([item.__dict__ for item in items])
+        failed = int(results['error'].notna().sum()) if 'error' in results else 0
+        skipped = int((results['error'].isna() & results['skipped']).sum()) if 'skipped' in results else 0
+        succeeded = len(results) - failed - skipped
+        if args.json_log:
+            event(logging.getLogger('fyron.dicom'), 'dicom', 'incomplete' if failed or results.empty else 'finished',
+                  total=len(results), succeeded=succeeded, failed=failed, skipped=skipped)
+        else:
+            _emit(args, f"DICOM: {succeeded} succeeded, {skipped} skipped, {failed} failed.",
+                  level='error' if failed or results.empty else 'success')
+        return int(failed > 0 or results.empty)
+    finally:
+        close = getattr(downloader, 'close', None)
+        if close is not None:
+            close()
 
 
 def _cmd_dicom_seg(args: argparse.Namespace) -> int:

@@ -461,7 +461,7 @@ discover_preview_sources(input_dir: StrPath, *, recursive: bool = True, include_
 
 ## `fyron.visualization.curate_previews.prepare_curate_image_previews`
 
-Write Curate-ready PNG previews from medical image folders.
+Write PNG previews from medical image folders for review.
 
 **Import path:** `fyron.visualization.curate_previews.prepare_curate_image_previews`
 

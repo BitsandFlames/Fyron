@@ -74,8 +74,13 @@ def test_worker_retry_policy_and_zero_limit(monkeypatch):
 
 def test_static_bearer_applies_to_sequential_session():
     session = requests.Session()
-    rest.FHIRRestClient(base_url="https://example.test", auth=session, bearer_token="test-only")
-    assert session.headers["Authorization"] == "Bearer test-only"
+    from test_redirect_safety import RedirectAdapter
+    adapter = RedirectAdapter("/fhir/page2")
+    session.mount("https://", adapter)
+    client = rest.FHIRRestClient(base_url="https://example.test/fhir", auth=session, bearer_token="test-only")
+    list(client.fetch_bundles("Patient", show_progress=False))
+    assert all(request.headers["Authorization"] == "Bearer test-only" for request in adapter.calls)
+    assert "Authorization" not in session.headers
 
 
 def test_parallel_preserves_explicit_basic_headers_and_retries(monkeypatch):

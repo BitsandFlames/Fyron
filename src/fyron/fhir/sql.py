@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from .._diagnostics import event, safe_error, batch_report, error_event, task_outcome
+from .._diagnostics import event, safe_error, batch_report, task_outcome
+from .._completion import publish_files, verified_files, file_digest
+from .._client_io import fingerprint
 
 import logging
 import os
@@ -10,6 +12,8 @@ import multiprocessing as mp
 import re
 import time
 import math
+import tempfile
+from contextlib import contextmanager
 from dataclasses import dataclass
 from itertools import product
 from pathlib import Path
@@ -29,6 +33,99 @@ class SQLQueryError(RuntimeError):
     """Raised when a SQL query fails or returns invalid results."""
 
 
+_SQL_FAILURES = {
+    "authentication": ("authentication", "Database authentication failed. Check the approved database role and password or token."),
+    "permission": ("permission", "Database access denied. Ask your administrator to check the role's schema and table permissions."),
+    "syntax": ("unexpected_response", "SQL syntax is invalid. Review the statement and PostgreSQL placeholder syntax."),
+    "schema": ("unexpected_response", "A referenced table, column or schema is unavailable. Check names, search_path and the site's schema."),
+    "timeout": ("timeout", "The database query was cancelled or reached its time limit. Check statement_timeout and reduce the extraction size."),
+    "connection": ("network", "The database connection failed or was lost. Check connectivity, the endpoint, TLS configuration and server availability."),
+    "transaction": ("unexpected_response", "The transaction is aborted. Roll back the connection or open a new client before retrying."),
+    "conflict": ("unexpected_response", "The transaction encountered a serialization conflict or deadlock. Review transaction boundaries before an explicit retry."),
+    "data": ("conversion", "The database rejected a value or constraint. Check parameter types, ranges and constraints."),
+    "binding": ("unexpected_response", "SQL parameters could not be bound. Check placeholder names, parameter counts and supported value types."),
+    "configuration": ("unexpected_response", "Database connection settings are missing or invalid. Provide a DSN or FHIR_DB_HOST, FHIR_DB_NAME and FHIR_DB_USER."),
+    "unknown": ("unknown", "Database operation failed. Review the query and connection settings privately; ask your administrator to inspect server diagnostics."),
+}
+
+
+def _sql_failure(error, operation):
+    """Build actionable SQL errors without copying remote diagnostics."""
+    reason = "unknown"
+    current = error
+    seen = set()
+    for _ in range(8):
+        if current is None or id(current) in seen:
+            break
+        seen.add(id(current))
+        known = getattr(current, "_fyron_sql_reason", None)
+        state = getattr(current, "sqlstate", None)
+        if known in _SQL_FAILURES:
+            reason = known
+            break
+        if isinstance(state, str):
+            if state.startswith("28"):
+                reason = "authentication"
+            elif state == "42501":
+                reason = "permission"
+            elif state == "42601":
+                reason = "syntax"
+            elif state in {"42P01", "42703", "3F000"}:
+                reason = "schema"
+            elif state == "57014":
+                reason = "timeout"
+            elif state.startswith("08") or state in {"57P01", "57P02", "57P03", "3D000"}:
+                reason = "connection"
+            elif state == "25P02":
+                reason = "transaction"
+            elif state in {"40001", "40P01"}:
+                reason = "conflict"
+            elif state.startswith(("22", "23")):
+                reason = "data"
+        if reason != "unknown":
+            break
+        if psycopg is not None and isinstance(current, psycopg.OperationalError):
+            reason = "connection"
+            break
+        if isinstance(current, TimeoutError):
+            reason = "timeout"
+            break
+        if isinstance(current, (TypeError, KeyError, IndexError)):
+            reason = "binding"
+        current = current.__cause__ or current.__context__
+    category, hint = _SQL_FAILURES[reason]
+    result = SQLQueryError(f"{operation}: {hint}")
+    result._fyron_sql_reason = reason
+    result.error_category = category
+    return result
+
+
+@contextmanager
+def _sql_operation(operation, enabled=False):
+    """Track one operation using only counts, elapsed time and safe categories."""
+    started = time.monotonic()
+    counts = {"sql_operation": {"SQL connection": "connection", "SQL query": "query",
+              "SQL DataFrame query": "dataframe", "Streaming SQL query": "stream"}[operation]}
+    if enabled:
+        event(logger, "sql", "started", **counts)
+    try:
+        yield counts
+    except Exception as exc:
+        failure = _sql_failure(exc, operation)
+        event(logger, "sql", "failed", level=logging.ERROR,
+              elapsed_s=time.monotonic() - started,
+              error_category=failure.error_category,
+              sql_error=failure._fyron_sql_reason, **counts)
+        raise failure from None
+    except (GeneratorExit, KeyboardInterrupt):
+        if enabled:
+            event(logger, "sql", "incomplete", elapsed_s=time.monotonic() - started, **counts)
+        raise
+    else:
+        if enabled:
+            event(logger, "sql", "finished", elapsed_s=time.monotonic() - started, **counts)
+
+
 @dataclass
 class SQLConfig:
     dsn: Optional[str]
@@ -38,6 +135,8 @@ class SQLConfig:
     user: Optional[str]
     password: Optional[str]
     sslmode: Optional[str]
+    statement_timeout: Optional[float] = None
+    lock_timeout: Optional[float] = None
 
 
 @dataclass
@@ -50,6 +149,13 @@ class SQLPartition:
 
 class FHIRSQLClient:
     """Lightweight SQL client for FHIR-backed databases.
+
+    Parameters
+    ----------
+    statement_timeout:
+        Optional positive query time limit in seconds on parent and worker connections.
+    lock_timeout:
+        Optional positive lock wait limit in seconds; None preserves server settings.
 
     Environment variables (optional):
     - FHIR_DB_DSN
@@ -72,13 +178,23 @@ class FHIRSQLClient:
         sslmode: Optional[str] = None,
         connect_timeout: int = 10,
         log_queries: bool = False,
+        *,
+        statement_timeout: Optional[float] = None,
+        lock_timeout: Optional[float] = None,
     ) -> None:
-        """Initialize a SQL client for Postgres-backed FHIR data."""
+        """Initialize a SQL client for Postgres-backed FHIR data.
+
+        statement_timeout and lock_timeout are optional positive durations in
+        seconds, applied to all owned connections. None preserves server settings.
+        """
         if psycopg is None:
             raise ImportError(
                 "psycopg is required for FHIRSQLClient. Install with `uv add psycopg` "
                 "and ensure libpq is available."
             ) from _PSYCOPG_IMPORT_ERROR
+        for value in (statement_timeout, lock_timeout):
+            if value is not None and (isinstance(value, bool) or not math.isfinite(value) or value <= 0):
+                raise ValueError("SQL timeouts must be positive finite seconds or None.")
         self.config = SQLConfig(
             dsn=dsn or os.environ.get("FHIR_DB_DSN"),
             host=host or os.environ.get("FHIR_DB_HOST"),
@@ -87,6 +203,7 @@ class FHIRSQLClient:
             user=user or os.environ.get("FHIR_DB_USER"),
             password=password or os.environ.get("FHIR_DB_PASSWORD"),
             sslmode=sslmode or os.environ.get("FHIR_DB_SSLMODE"),
+            statement_timeout=statement_timeout, lock_timeout=lock_timeout,
         )
         self.connect_timeout = connect_timeout
         self.log_queries = log_queries
@@ -111,20 +228,16 @@ class FHIRSQLClient:
         params: Optional[Dict[str, Any] | Sequence[Any]] = None,
     ) -> List[Dict[str, Any]]:
         """Execute a SQL query and return rows as dicts."""
-        try:
+        with _sql_operation("SQL query", self.log_queries) as counts:
             with self._conn.cursor() as cur:
-                if self.log_queries:
-                    event(logger, "sql", "activity", level=logging.DEBUG)
-                    event(logger, "sql", "activity", level=logging.DEBUG)
                 cur.execute(sql, params)
                 if cur.description is None:
+                    counts["rows"] = 0
                     return []
                 columns = [col.name for col in cur.description]
                 rows = cur.fetchall()
+            counts["rows"] = len(rows)
             return [dict(zip(columns, row)) for row in rows]
-        except psycopg.Error as exc:
-            error_event(logger, "sql", exc)
-            raise SQLQueryError("SQL query failed") from None
 
     def query_to_dataframe(
         self,
@@ -143,17 +256,12 @@ class FHIRSQLClient:
         rename:
             Optional mapping to rename columns in the resulting DataFrame.
         """
-        try:
-            if self.log_queries:
-                event(logger, "sql", "activity", level=logging.DEBUG)
-                event(logger, "sql", "activity", level=logging.DEBUG)
+        with _sql_operation("SQL DataFrame query", self.log_queries) as counts:
             df = pd.read_sql_query(sql, self._conn, params=params)
             if rename:
                 df = df.rename(columns=rename)
+            counts["rows"] = len(df)
             return df
-        except Exception as exc:
-            error_event(logger, "sql", exc)
-            raise SQLQueryError("SQL query_to_dataframe failed") from None
 
     def query_df(
         self,
@@ -278,17 +386,21 @@ class FHIRSQLClient:
         chunksize: int = 10000,
     ) -> Iterator[pd.DataFrame]:
         """Stream a large SQL query as DataFrame chunks."""
-        try:
-            if self.log_queries:
-                event(logger, "sql", "activity", level=logging.DEBUG)
-                event(logger, "sql", "activity", level=logging.DEBUG)
-            for chunk in pd.read_sql_query(sql, self._conn, params=params, chunksize=chunksize):
-                if rename:
-                    chunk = chunk.rename(columns=rename)
-                yield chunk
-        except Exception as exc:
-            error_event(logger, "sql", exc)
-            raise SQLQueryError("SQL query_df_stream failed") from None
+        _positive_integer(chunksize, "chunksize")
+        with _sql_operation("Streaming SQL query", self.log_queries) as counts:
+            counts.update(rows=0, chunks=0)
+            iterator = pd.read_sql_query(sql, self._conn, params=params, chunksize=chunksize)
+            try:
+                for chunk in iterator:
+                    if rename:
+                        chunk = chunk.rename(columns=rename)
+                    counts["rows"] += len(chunk)
+                    counts["chunks"] += 1
+                    yield chunk
+            finally:
+                close = getattr(iterator, "close", None)
+                if close is not None:
+                    close()
 
     @batch_report("sql")
     def export_query_partitioned(
@@ -311,6 +423,8 @@ class FHIRSQLClient:
         skip_existing: bool = True,
         continue_on_error: bool = False,
         rename: Optional[Dict[str, str]] = None,
+        overwrite: bool = False,
+        write_completion_record: bool = True,
     ) -> pd.DataFrame:
         """Stream partitioned SQL query results to resumable CSV part files.
 
@@ -346,12 +460,18 @@ class FHIRSQLClient:
         chunksize
             Number of rows per streamed pandas chunk.
         skip_existing
-            Whether existing non-empty part files are treated as complete.
+            Skip only partition files verified against matching completion records.
         continue_on_error
             Whether failed partitions should be recorded in the manifest instead
             of raising immediately.
         rename
             Optional output column rename mapping.
+        overwrite
+            Intentionally replace existing partitions, including unverified files.
+            skip_existing=False also explicitly allows replacement for compatibility.
+        write_completion_record
+            Write fingerprint-bound completion JSON. False disables new verified
+            skips; unverified existing outputs remain protected.
         """
         out_dir = Path(output_dir).expanduser().resolve()
         parts_dir = out_dir / "_parts"
@@ -365,12 +485,19 @@ class FHIRSQLClient:
             param_grid=param_grid,
             derived_params=derived_params,
         )
+        _positive_integer(chunksize, "chunksize")
+        planned = [_format_partition_template(part_filename, _filename_context(p)) for p in partitions]
+        if len({str(path).casefold() for path in planned}) != len(planned):
+            raise ValueError("SQL partitions resolve to colliding output paths.")
         manifest_rows: List[Dict[str, Any]] = []
         for partition in partitions:
             context = _filename_context(partition)
             relative = _format_partition_template(part_filename, context)
             part_path = parts_dir / relative
-            tmp_path = part_path.with_suffix(part_path.suffix + ".tmp")
+            if not part_path.resolve().is_relative_to(parts_dir.resolve()) or part_path.is_symlink():
+                raise ValueError("SQL output must remain inside its partition directory.")
+            completion_key = "sql:" + fingerprint(sql, partition.params, partition.metadata, output_columns, rename)
+            replace = overwrite or not skip_existing
             part_path.parent.mkdir(parents=True, exist_ok=True)
             row = dict(partition.metadata)
             row.update(
@@ -381,13 +508,16 @@ class FHIRSQLClient:
                     "message": "",
                 }
             )
-            if skip_existing and _file_done(part_path):
+            if skip_existing and not overwrite and verified_files(part_path.parent, completion_key) == [part_path]:
                 row["status"] = "skipped"
                 row["row_count"] = _csv_row_count(part_path)
                 manifest_rows.append(row)
+                task_outcome(skipped=True)
                 continue
-            if tmp_path.exists():
-                tmp_path.unlink()
+            if part_path.exists() and not replace:
+                raise FileExistsError("Existing SQL partition is unverified for this query; explicit overwrite required.")
+            staging = tempfile.TemporaryDirectory(prefix=".fyron-sql-", dir=part_path.parent)
+            tmp_path = Path(staging.name) / part_path.name
             wrote_rows = False
             total_rows = 0
             try:
@@ -407,7 +537,8 @@ class FHIRSQLClient:
                     total_rows += len(chunk)
                 if not wrote_rows:
                     pd.DataFrame(columns=list(output_columns or [])).to_csv(tmp_path, index=False)
-                tmp_path.replace(part_path)
+                publish_files(staging.name, part_path.parent, completion_key,
+                              overwrite=replace, write_record=write_completion_record)
                 row["row_count"] = total_rows
             except Exception as exc:
                 if tmp_path.exists():
@@ -419,6 +550,8 @@ class FHIRSQLClient:
                 if not continue_on_error:
                     raise
                 continue
+            finally:
+                staging.cleanup()
             manifest_rows.append(row)
             task_outcome()
 
@@ -430,6 +563,9 @@ class FHIRSQLClient:
                 combine_by=combine_by,
                 combined_filename=combined_filename,
                 output_columns=output_columns,
+                overwrite=overwrite or not skip_existing,
+                write_completion_record=write_completion_record,
+                signature=fingerprint(sql, params, rename, output_columns),
             )
         return manifest
 
@@ -467,8 +603,10 @@ class FHIRSQLClient:
             for _ in frames:
                 task_outcome()
         except Exception as exc:
-            error_event(logger, "sql", exc)
-            raise SQLQueryError("Parallel SQL execution failed") from None
+            failure = _sql_failure(exc, "Parallel SQL execution failed; no partial result returned")
+            event(logger, "sql", "failed", level=logging.ERROR,
+                  error_category=failure.error_category, sql_error=failure._fyron_sql_reason)
+            raise failure from None
         if not frames:
             return pd.DataFrame()
         return _merge_frames(frames, merge=merge, unique_on=unique_on)
@@ -576,8 +714,10 @@ class FHIRSQLClient:
                     completed.append((frame, time.monotonic() - started))
                     task_outcome()
         except Exception as exc:
-            error_event(logger, "sql", exc)
-            raise SQLQueryError("Cohort SQL extraction failed; no partial result returned.") from None
+            failure = _sql_failure(exc, "Cohort SQL extraction failed; no partial result returned")
+            event(logger, "sql", "failed", level=logging.ERROR,
+                  error_category=failure.error_category, sql_error=failure._fyron_sql_reason)
+            raise failure from None
         frames = [frame for frame, _ in completed]
         data = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
         unmatched = pd.DataFrame(columns=keys)
@@ -761,27 +901,12 @@ class FHIRSQLClient:
 
     def _connect(self) -> psycopg.Connection:
         """Create a database connection from config."""
-        try:
-            if self.config.dsn:
-                conn = psycopg.connect(self.config.dsn, connect_timeout=self.connect_timeout)
-            else:
-                if not all([self.config.host, self.config.dbname, self.config.user]):
-                    raise ValueError("Missing DB connection info. Set FHIR_DB_* env vars or pass args.")
-                conn = psycopg.connect(
-                    host=self.config.host,
-                    port=self.config.port or 5432,
-                    dbname=self.config.dbname,
-                    user=self.config.user,
-                    password=self.config.password,
-                    sslmode=self.config.sslmode,
-                    connect_timeout=self.connect_timeout,
-                )
-            if self.log_queries:
-                event(logger, "sql", "activity", level=logging.DEBUG)
-            return conn
-        except Exception as exc:
-            error_event(logger, "sql", exc)
-            raise SQLQueryError("Failed to connect to SQL database") from None
+        with _sql_operation("SQL connection", self.log_queries):
+            if not self.config.dsn and not all([self.config.host, self.config.dbname, self.config.user]):
+                failure = SQLQueryError("SQL connection: " + _SQL_FAILURES["configuration"][1])
+                failure._fyron_sql_reason = "configuration"
+                raise failure from None
+            return _connect_from_config(self.config, self.connect_timeout)
 
 
 def build_sql_partitions(
@@ -1020,8 +1145,11 @@ def _csv_row_count(path: Path) -> int:
     if not _file_done(path):
         return 0
     count = 0
-    for chunk in pd.read_csv(path, chunksize=50000):
-        count += len(chunk)
+    try:
+        for chunk in pd.read_csv(path, chunksize=50000):
+            count += len(chunk)
+    except pd.errors.EmptyDataError:
+        return 0
     return count
 
 
@@ -1032,51 +1160,62 @@ def _combine_partition_exports(
     combine_by: str,
     combined_filename: str,
     output_columns: Optional[Sequence[str]],
+    overwrite: bool = False,
+    write_completion_record: bool = True,
+    signature: Optional[str] = None,
 ) -> None:
-    """Combine successful part files by one manifest metadata group."""
+    """Combine completed partitions without altering identifier text or old files."""
+    if manifest.empty:
+        return
     column = f"_fyron_partition_{combine_by}"
     if combine_by in {"year", "month", "day", "date"}:
         starts = pd.to_datetime(manifest["_fyron_partition_start"], errors="coerce")
-        if combine_by == "year":
-            manifest = manifest.assign(_fyron_partition_year=starts.dt.strftime("%Y"))
-        elif combine_by == "month":
-            manifest = manifest.assign(_fyron_partition_month=starts.dt.strftime("%m"))
-        elif combine_by == "day":
-            manifest = manifest.assign(_fyron_partition_day=starts.dt.strftime("%d"))
-        elif combine_by == "date":
-            manifest = manifest.assign(_fyron_partition_date=starts.dt.strftime("%Y-%m-%d"))
+        formats = {"year": "%Y", "month": "%m", "day": "%d", "date": "%Y-%m-%d"}
+        manifest = manifest.assign(**{column: starts.dt.strftime(formats[combine_by])})
     if column not in manifest.columns:
-        raise ValueError(f"Cannot combine by {combine_by!r}; manifest column {column!r} is missing.")
+        raise ValueError("Cannot combine partitions: the requested metadata group is missing.")
     successful = manifest[manifest["status"].isin(["ok", "skipped"])].copy()
+    planned = set()
     for value, group in successful.groupby(column, dropna=False):
         safe_value = _safe_filename_value(value)
-        context = {
-            "value": safe_value,
-            "year": safe_value,
-            "month": safe_value,
-            "day": safe_value,
-            "date": safe_value,
-            combine_by: safe_value,
-        }
-        filename = combined_filename.format(**context)
-        output_path = output_dir / filename
-        tmp_path = output_path.with_suffix(output_path.suffix + ".tmp")
+        context = dict.fromkeys(["value", "year", "month", "day", "date", combine_by], safe_value)
+        output_path = output_dir / _format_partition_template(combined_filename, context)
+        if (not output_path.resolve().is_relative_to(output_dir.resolve())
+                or output_path.is_symlink() or output_path.name.startswith(".fyron-")):
+            raise ValueError("Combined SQL output must stay inside its output directory.")
+        collision = str(output_path.resolve()).casefold()
+        if collision in planned:
+            raise ValueError("Combined SQL output names collide.")
+        planned.add(collision)
+        paths = [Path(path) for path in group["output_path"]]
+        if any(output_path.resolve() == path.resolve() for path in paths):
+            raise ValueError("Combined output must not replace a source partition.")
+        if any(not path.is_file() for path in paths):
+            raise FileNotFoundError("A completed SQL partition is missing; combined output not published.")
+        key = "sql-combined:" + fingerprint(signature, combine_by, output_columns,
+                 [(str(path.relative_to(output_dir)), file_digest(path)) for path in paths])
+        if verified_files(output_path.parent, key) == [output_path]:
+            continue
+        if output_path.exists() and not overwrite:
+            raise FileExistsError("Existing combined SQL output is unverified; explicit overwrite required.")
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        if tmp_path.exists():
-            tmp_path.unlink()
-        wrote_rows = False
-        for part_path in group["output_path"]:
-            path = Path(part_path)
-            if not _file_done(path):
-                continue
-            for chunk in pd.read_csv(path, chunksize=50000):
-                if output_columns is not None:
-                    chunk = chunk[list(output_columns)]
-                chunk.to_csv(tmp_path, mode="a", header=not wrote_rows, index=False)
-                wrote_rows = True
-        if not wrote_rows:
-            pd.DataFrame(columns=list(output_columns or [])).to_csv(tmp_path, index=False)
-        tmp_path.replace(output_path)
+        with tempfile.TemporaryDirectory(prefix=".fyron-sql-combined-", dir=output_path.parent) as staging:
+            temporary = Path(staging) / output_path.name
+            wrote_rows = False
+            for path in paths:
+                try:
+                    # CSV concatenation must not reinterpret clinical identifiers or NA-like strings.
+                    for chunk in pd.read_csv(path, chunksize=50000, dtype=str, keep_default_na=False):
+                        if output_columns is not None:
+                            chunk = chunk[list(output_columns)]
+                        chunk.to_csv(temporary, mode="a", header=not wrote_rows, index=False)
+                        wrote_rows = True
+                except pd.errors.EmptyDataError:
+                    continue
+            if not wrote_rows:
+                pd.DataFrame(columns=list(output_columns or [])).to_csv(temporary, index=False)
+            publish_files(staging, output_path.parent, key, overwrite=overwrite,
+                          write_record=write_completion_record)
 
 
 def _timed_worker_query_df(args):
@@ -1090,33 +1229,44 @@ def _worker_query_df(
 ) -> pd.DataFrame:
     """Worker helper for parallel SQL queries."""
     config, connect_timeout, sql, params, rename = args
-    conn = _connect_from_config(config, connect_timeout)
+    try:
+        conn = _connect_from_config(config, connect_timeout)
+    except Exception as exc:
+        raise _sql_failure(exc, "Worker SQL connection") from None
     try:
         df = pd.read_sql_query(sql, conn, params=params)
         if rename:
             df = df.rename(columns=rename)
         return df
     except Exception as exc:
-        raise SQLQueryError("Parallel SQL query failed") from None
+        raise _sql_failure(exc, "Parallel SQL query") from None
     finally:
         conn.close()
 
 
 def _connect_from_config(config: SQLConfig, connect_timeout: int) -> "psycopg.Connection":
-    """Connect to Postgres using a SQLConfig."""
+    """Connect and configure owned PostgreSQL connections without exposing values."""
     if config.dsn:
-        return psycopg.connect(config.dsn, connect_timeout=connect_timeout)  # type: ignore[union-attr]
-    if not all([config.host, config.dbname, config.user]):
-        raise ValueError("Missing DB connection info. Set FHIR_DB_* env vars or pass args.")
-    return psycopg.connect(  # type: ignore[union-attr]
-        host=config.host,
-        port=config.port or 5432,
-        dbname=config.dbname,
-        user=config.user,
-        password=config.password,
-        sslmode=config.sslmode,
-        connect_timeout=connect_timeout,
-    )
+        conn = psycopg.connect(config.dsn, connect_timeout=connect_timeout)
+    else:
+        if not all([config.host, config.dbname, config.user]):
+            raise ValueError("Missing DB connection info. Set FHIR_DB_* env vars or pass args.")
+        conn = psycopg.connect(host=config.host, port=config.port or 5432,
+            dbname=config.dbname, user=config.user, password=config.password,
+            sslmode=config.sslmode, connect_timeout=connect_timeout)
+    try:
+        settings = [(name, getattr(config, name, None)) for name in ("statement_timeout", "lock_timeout")]
+        if any(value is not None for _, value in settings):
+            with conn.cursor() as cursor:
+                for name, value in settings:
+                    if value is not None:
+                        cursor.execute("SELECT set_config(%s, %s, false)",
+                                       (name, str(max(1, math.ceil(value * 1000)))))
+            conn.commit()  # Configuration only: the newly owned connection has no caller transaction.
+        return conn
+    except BaseException:
+        conn.close()
+        raise
 
 
 def _safe_replace_placeholder(sql: str, name: str, replacement: str) -> str:

@@ -35,5 +35,5 @@ Rules:
 - Check orientation, spacing, shape, and mask alignment before comparing images.
 - Keep DICOM identifiers and private tags out of prompts and examples unless explicitly de-identified.
 - Use synthetic or toy images in assistant-generated demos.
-- For CT/MRI review folders, prefer Curate preview generation before manual screening.
+- For CT/MRI review folders, prefer image preview generation before manual screening.
 

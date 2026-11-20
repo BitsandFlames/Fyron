@@ -2,7 +2,7 @@
 
 For site-specific access setup, see [Authentication methods and CLI support](../authentication/index.md). Choose the method and permissions approved by your administrator.
 
-The `fyron` command line interface wraps the repeatable parts of clinical data science: API extraction, DICOM downloads, imaging QC, Curate preview preparation, BOA feature extraction, radiomics, DICOM SEG export, synthetic DICOM export, audit manifests, and documentation builds.
+The `fyron` command line interface wraps the repeatable parts of clinical data science: API extraction, DICOM downloads, imaging QC, image preview preparation, BOA feature extraction, radiomics, DICOM SEG export, synthetic DICOM export, audit manifests, and documentation builds.
 
 Use the Python API when you are exploring. Use notebooks when you need narrative analysis. Use the CLI when a step should be rerun exactly the same way by you, a collaborator, or a compute job.
 
@@ -55,7 +55,7 @@ Normal commands do not print the banner on startup, which keeps notebooks, CI lo
 | `fyron document-download` | Download documents with OIDC device or service-account auth | Files and sensitive results CSV |
 | `fyron synthetic-dicom` | Export generated NIfTI volumes as synthetic DICOM series | DICOM files and manifest CSV |
 | `fyron dicom-seg` | Write source-referenced DICOM SEG objects | `.seg.dcm` |
-| `fyron dataset-curate-previews` | Prepare CT/MRI/X-ray PNG previews for Curate | PNG folder and manifest CSV |
+| `fyron dataset-curate-previews` | Prepare CT/MRI/X-ray PNG previews for review | PNG folder and manifest CSV |
 | `fyron dataset-nnunetv2` | Prepare nnU-Net v2 segmentation folders | NIfTI dataset folder and manifest |
 | `fyron dataset-yolo-classify` | Prepare YOLO classification folders | split/class image folders |
 | `fyron dataset-yolo-detect` | Prepare YOLO detection folders and labels | images, labels, `data.yaml` |
@@ -64,9 +64,9 @@ Normal commands do not print the banner on startup, which keeps notebooks, CI lo
 | `fyron imaging-qc` | Summarize DICOM/NIfTI geometry, mask volumes, and intensities | CSV or JSON |
 | `fyron audit-manifest` | Write reproducibility manifests | JSON |
 
-## Curate Preview And Review Workflow
+## Image Preview Workflow
 
-Use `dataset-curate-previews` when CT/MRI folders, DICOM series, X-rays, or topograms need to become ordinary PNG files for Curate. The command scans nested folders by default, writes preview PNGs, and creates a manifest that maps each preview back to its source.
+Use `dataset-curate-previews` when CT/MRI folders, DICOM series, X-rays, or topograms need to become ordinary PNG files for review. The command scans nested folders by default, writes preview PNGs, and creates a manifest that maps each preview back to its source.
 
 ```bash
 uv add "fyron[visualization]"
@@ -75,10 +75,9 @@ fyron dataset-curate-previews \
   --input-dir ct_exports/ \
   --output-dir curate_previews/
 
-# Start Curate separately: https://github.com/BitsandFlames/Curate
 ```
 
-Drop `curate_previews/` into the Curate **Add cohort** dialog. Three-dimensional volumes produce middle axial, coronal, and sagittal images. Two-dimensional images produce one preview image.
+Inspect the files in `curate_previews/` with your preferred image viewer. Three-dimensional volumes produce middle axial, coronal, and sagittal images. Two-dimensional images produce one preview image.
 
 Useful options:
 
@@ -410,3 +409,22 @@ fyron docs-build
 ```
 
 This runs the custom BF documentation generator and writes the static site under `site/`.
+
+DICOM full-study output can use exact folder labels with `--no-study-hash` and
+`--study-folder-col` (CSV) or `--study-folder-name` (single study). Use both
+`--no-study-manifest` and `--no-completion-record` to omit new DICOM JSON sidecars.
+Documents use `--document-id` / `--id-col` for custom filenames, `--flat-output`
+for one folder and `--no-completion-record` for the JSON opt-out. See the
+[DICOM downloader](dicom/downloader.md#exact-study-folders-and-optional-json-records)
+and [document downloader](documents/downloader.md#custom-names-without-hash-folders-or-completion-json).
+
+## Client reliability controls
+
+DICOM supports `--request-timeout SECONDS` and
+`--parallel-job-timeout SECONDS` (both opt-in). DICOM CLI summaries show outcome
+counts and return nonzero for failed or empty downloads. Documents support
+repeatable `--content-type MIME`, for example `--content-type text/plain`.
+Both batch commands respect `--quiet`, `--no-progress`, `--no-color` and
+`--json-log`. Requested results CSVs are published atomically. Counts of tasks,
+returned series and files are different quantities; inspect result rows before
+using a download as complete.

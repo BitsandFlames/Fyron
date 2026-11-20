@@ -95,5 +95,5 @@ Set `OAUTH_TOKEN_URL` to your provider's token endpoint, for example
   not interactive user login or ID-token validation. It does not implement
   `private_key_jwt` or every SMART backend-services profile.
 
-See the [FHIR authentication documentation](https://fyron.bitsandflames.ai/modules/fhir/rest/#service-account-authentication)
+See the [FHIR authentication documentation](https://docs.fyron.bitsandflames.ai/modules/fhir/rest/#service-account-authentication)
 for provider setup and supported options.

@@ -1,9 +1,14 @@
 # Changelog
 
-## 0.3.20b4 - 2026-10-30
+## 0.3.20b5 - 2026-11-20
 
-- Offer current Fyron and Curate source under CC BY-NC 4.0, retaining previously granted MIT permissions and third-party licenses.
-- Add authentication guides, demand-driven token renewal guidance and PostgreSQL connection examples.
-- Update Curate dependencies to address the body-parser and Multer security advisories.
-- Align license metadata, documentation, citation and version references for Beta 4.
-- Start the recreated repository from a fresh source snapshot and simplify the release history to Beta 4.
+- Improve FHIR REST, PostgreSQL, DICOMweb and document extraction diagnostics and failure handling.
+- Verify SQL export restarts against query/config fingerprints and file digests, preserving identifier text in combined CSVs.
+- Add optional SQL statement/lock timeouts and DICOM request/worker deadlines.
+- Add exact study-folder labels, optional DICOM completion JSON, stricter instance validation and parent-owned worker staging cleanup.
+- Add ordered optional download task reports, bounded document scheduling, cancellation and MIME constraints.
+- Preserve borrowed HTTP sessions and protect upstream transport/parser diagnostics.
+- Add hands-on REST/SQL/download onboarding and complete client parameter references generated from source.
+- Complete current-source documentation cleanup for the separate Curate companion application.
+
+Historical Beta 4 release notes remain in the documentation.

@@ -337,7 +337,7 @@ class _FakeSession(requests.Session):
         self.calls: list[dict[str, Any]] = []
         self.headers: dict[str, str] = {}
 
-    def request(self, method: str, url: str, json: dict[str, Any], timeout: int) -> _FakeResponse:
+    def request(self, method: str, url: str, json: dict[str, Any], timeout: int, **kwargs) -> _FakeResponse:
         self.calls.append({"method": method, "url": url, "json": json, "timeout": timeout})
         return self.response
 

@@ -84,7 +84,7 @@ def test_repository_trust_files_exist_and_are_linked():
 
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     assert "CITATION.cff" in readme
-    assert 'href="https://fyron.bitsandflames.ai/"' in readme
+    assert 'href="https://docs.fyron.bitsandflames.ai/"' in readme
     assert "https://github.com/BitsandFlames/Fyron/blob/" in readme
     assert "/LICENSE" in readme
 
@@ -528,7 +528,7 @@ def test_request_json_omits_operation_outcome_diagnostics():
         auth = None
         headers = {}
 
-        def get(self, url, timeout):
+        def get(self, url, timeout, **kwargs):
             response = rest_module.requests.Response()
             response.status_code = 400
             response.url = url
@@ -637,19 +637,19 @@ def test_imaging_navigation_is_separate_from_body_and_organ_analysis():
         assert anchor in anchors.values()
 
 
-def test_curate_guides_navigation_and_nested_asset_links():
+def test_documentation_excludes_standalone_app_navigation():
     import runpy
 
     docs = runpy.run_path(str(ROOT / "scripts" / "build_docs.py"))
     pages = docs["PAGES"]
     groups = list(dict.fromkeys(page.group for page in pages))
-    assert groups[groups.index("Audit & Provenance") + 1] == "Curate"
+    assert "Curate" not in groups
     assert "Applications" not in groups
-    curate = [page for page in pages if page.group == "Curate"]
-    assert [page.title for page in curate] == [
-        "Overview", "Start the app", "Prepare your data", "Review & export",
-    ]
-    review = next(page for page in curate if "review-export" in page.source)
-    assert docs["rewrite_href"]("../../assets/curate-synthetic-zen.png", review) == (
-        "../../../assets/curate-synthetic-zen.png"
-    )
+    assert not any("curate" in page.source for page in pages)
+    for page in pages:
+        if page.source.startswith("releases/"):
+            continue  # Published release history remains unchanged.
+        source = (ROOT / "docs" / page.source).read_text()
+        assert "applications/curate" not in source
+        assert "github.com/BitsandFlames/Curate" not in source
+        assert "prepare_curate_curate_previews" not in source

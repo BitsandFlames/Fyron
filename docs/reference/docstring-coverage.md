@@ -4,7 +4,7 @@ This generated report lists public APIs whose generated reference entries are in
 
 Priority public-beta APIs with incomplete docstring coverage: **141**.
 
-Full generated backlog: **358** incomplete API entries.
+Full generated backlog: **357** incomplete API entries.
 
 ## How To Use This Report
 
@@ -411,7 +411,6 @@ Full generated backlog: **358** incomplete API entries.
 | --- | --- |
 | `fyron.documents.client.DocumentDownloader` | missing parameter descriptions: max_workers, retries, save_mode, force_extension |
 | `fyron.documents.client.DocumentDownloader.download_id` | missing parameter descriptions: url |
-| `fyron.documents.client.DocumentDownloader.download_urls` | missing parameter descriptions: urls, results_csv |
 | `fyron.documents.client.DocumentResult` | missing description |
 
 ## `fyron.explainability.inspection`

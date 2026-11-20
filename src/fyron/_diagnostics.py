@@ -13,7 +13,7 @@ import requests
 
 CATEGORIES = {
     "authentication", "permission", "timeout", "network", "unexpected_response",
-    "conversion", "filesystem", "empty_download", "unknown",
+    "conversion", "filesystem", "empty_download", "unknown", "cancelled",
 }
 _batch_state = ContextVar("fyron_batch_state", default=None)
 
@@ -32,7 +32,9 @@ def classify_error(error, default="unknown"):
     if isinstance(response, dict):
         status = response.get("ResponseMetadata", {}).get("HTTPStatusCode")
     status = status if type(status) is int and 100 <= status <= 599 else None
-    if status == 401:
+    if getattr(error, "_fyron_cancelled", False) is True:
+        category = "cancelled"
+    elif status == 401:
         category = "authentication"
     elif status == 403 or isinstance(error, PermissionError):
         category = "permission"
@@ -53,7 +55,19 @@ def classify_error(error, default="unknown"):
 
 def safe_error(error, default="unknown"):
     category, status = classify_error(error, default)
-    return f"Operation failed ({category})" + (f"; HTTP {status}." if status else ".")
+    hints = {
+        "cancelled": "Inspect completed outcomes before retrying the remaining work.",
+        "authentication": "Check the approved credentials, token audience and renewal settings.",
+        "permission": "Check the account's required scopes and resource permissions.",
+        "timeout": "Check request/job time limits and reduce the batch size if needed.",
+        "network": "Check connectivity, endpoint configuration, TLS and service availability.",
+        "unexpected_response": "Check the endpoint, supported parameters and expected response format.",
+        "conversion": "Check source readability, identifiers and conversion requirements.",
+        "filesystem": "Check output permissions, free disk space and existing-file conflicts.",
+        "unknown": "Review configuration privately and consult the service administrator.",
+    }
+    return (f"Operation failed ({category})" + (f"; HTTP {status}." if status else ".")
+            + " " + hints.get(category, "Review the operation inputs and expected output."))
 
 
 def error_event(logger, operation, error):
@@ -113,10 +127,19 @@ def event(logger, operation, stage, *, level=logging.INFO, **fields):
     operation = operation if operation in {"fhir", "dicom", "documents", "llm", "sql", "network", "s3", "radiomics", "boa"} else "network"
     stage = stage if stage in {"started", "finished", "incomplete", "failed", "warning", "activity", "http", "authentication", "delivery"} else "activity"
     payload = {"operation": operation, "stage": stage}
-    for name in ("job", "elapsed_s", "total", "completed", "succeeded", "failed", "skipped", "http_status", "unfinished"):
+    for name in ("job", "rows", "chunks", "elapsed_s", "total", "completed", "succeeded", "failed", "skipped", "http_status", "unfinished"):
         value = fields.get(name)
         if type(value) in (int, float):
             payload[name] = value
+    if operation == "sql" and fields.get("sql_operation") in {"connection", "query", "dataframe", "stream"}:
+        payload["sql_operation"] = fields["sql_operation"]
+    if operation == "sql" and fields.get("sql_error") in {
+        "authentication", "permission", "syntax", "schema", "timeout", "connection",
+        "transaction", "conflict", "data", "binding", "configuration", "unknown",
+    }:
+        payload["sql_error"] = fields["sql_error"]
+    if fields.get("unit") in {"request", "query", "study", "series", "document", "batch"}:
+        payload["unit"] = fields["unit"]
     run_id = fields.get("run_id", (_batch_state.get() or {}).get("run_id"))
     if isinstance(run_id, str) and len(run_id) == 32 and all(c in "0123456789abcdef" for c in run_id):
         payload["run_id"] = run_id

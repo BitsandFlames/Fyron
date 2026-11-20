@@ -57,7 +57,6 @@ PAGES = [
     Page("Clinical AI Study Workflow", "clinical-ai-study-workflow.md", "clinical-ai-study-workflow/index.html", "Start", parent="getting-started/index.html"),
     Page("Survival Workflow", "survival-workflow.md", "survival-workflow/index.html", "Start", parent="getting-started/index.html"),
     Page("FHIR To DataFrame Quickstart", "quickstarts/fhir-rest-to-dataframe.md", "quickstarts/fhir-rest-to-dataframe/index.html", "Start", parent="getting-started/index.html"),
-    Page("Curate Review Quickstart", "quickstarts/curate-image-review.md", "quickstarts/curate-image-review/index.html", "Start", parent="getting-started/index.html"),
     Page("Survival Quickstart", "quickstarts/survival-analysis.md", "quickstarts/survival-analysis/index.html", "Start", parent="getting-started/index.html"),
     Page("Plotting Gallery Quickstart", "quickstarts/plotting-gallery.md", "quickstarts/plotting-gallery/index.html", "Start", parent="getting-started/index.html"),
     *[
@@ -68,6 +67,12 @@ PAGES = [
             reverse=True,
         )
     ],
+    Page("Start here", "onboarding/index.md", "onboarding/index.html", "Onboarding"),
+    Page("Authentication", "onboarding/authentication.md", "onboarding/authentication/index.html", "Onboarding"),
+    Page("FHIR REST", "onboarding/fhir-rest.md", "onboarding/fhir-rest/index.html", "Onboarding"),
+    Page("PostgreSQL", "onboarding/sql.md", "onboarding/sql/index.html", "Onboarding"),
+    Page("DICOMweb", "onboarding/dicomweb.md", "onboarding/dicomweb/index.html", "Onboarding"),
+    Page("Documents", "onboarding/documents.md", "onboarding/documents/index.html", "Onboarding"),
     Page("Unified CLI", "modules/cli.md", "modules/cli/index.html", "CLI"),
     Page("Choose your authentication", "authentication/index.md", "authentication/index.html", "Authentication"),
     Page("FHIR REST", "authentication/fhir-rest.md", "authentication/fhir-rest/index.html", "Authentication"),
@@ -77,15 +82,19 @@ PAGES = [
     Page("Core I/O", "modules/core.md", "modules/core/index.html", "Clinical Data"),
     Page("FHIR", "modules/fhir.md", "modules/fhir/index.html", "Clinical Data"),
     Page("FHIR REST", "modules/fhir/rest.md", "modules/fhir/rest/index.html", "Clinical Data", parent="modules/fhir/index.html"),
+    Page("FHIR REST parameters", "modules/fhir/rest/parameters.md", "modules/fhir/rest/parameters/index.html", "Clinical Data", parent="modules/fhir/rest/index.html"),
     Page("FHIR SQL", "modules/fhir/sql.md", "modules/fhir/sql/index.html", "Clinical Data", parent="modules/fhir/index.html"),
+    Page("FHIR SQL parameters", "modules/fhir/sql/parameters.md", "modules/fhir/sql/parameters/index.html", "Clinical Data", parent="modules/fhir/sql/index.html"),
     Page("FHIR Builder", "modules/fhir/builder.md", "modules/fhir/builder/index.html", "Clinical Data", parent="modules/fhir/index.html"),
     Page("FHIR Mapping", "modules/fhir/mapping.md", "modules/fhir/mapping/index.html", "Clinical Data", parent="modules/fhir/index.html"),
     Page("DICOM", "modules/dicom.md", "modules/dicom/index.html", "Clinical Data"),
     Page("DICOMDownloader", "modules/dicom/downloader.md", "modules/dicom/downloader/index.html", "Clinical Data", parent="modules/dicom/index.html"),
+    Page("DICOM parameters", "modules/dicom/downloader/parameters.md", "modules/dicom/downloader/parameters/index.html", "Clinical Data", parent="modules/dicom/downloader/index.html"),
     Page("Synthetic Export", "modules/dicom/synthetic.md", "modules/dicom/synthetic/index.html", "Clinical Data", parent="modules/dicom/index.html"),
     Page("DICOM SEG", "modules/dicom/seg.md", "modules/dicom/seg/index.html", "Clinical Data", parent="modules/dicom/index.html"),
     Page("Documents", "modules/documents.md", "modules/documents/index.html", "Clinical Data"),
     Page("DocumentDownloader", "modules/documents/downloader.md", "modules/documents/downloader/index.html", "Clinical Data", parent="modules/documents/index.html"),
+    Page("Document parameters", "modules/documents/downloader/parameters.md", "modules/documents/downloader/parameters/index.html", "Clinical Data", parent="modules/documents/downloader/index.html"),
     Page("Cohort Tables", "modules/cohort.md", "modules/cohort/index.html", "Clinical Data"),
     Page("Phenotyping", "modules/phenotyping.md", "modules/phenotyping/index.html", "Clinical Data"),
     Page("Clinical Codes", "modules/clinical-codes.md", "modules/clinical-codes/index.html", "Clinical Data"),
@@ -116,10 +125,6 @@ PAGES = [
     Page("Safe Network Diagnostics", "diagnostics.md", "diagnostics/index.html", "Audit & Provenance"),
     Page("Research Reliability", "reliability.md", "reliability/index.html", "Audit & Provenance"),
     Page("Using Fyron in Research", "repository-trust.md", "repository-trust/index.html", "Audit & Provenance"),
-    Page("Overview", "applications/curate.md", "applications/curate/index.html", "Curate"),
-    Page("Start the app", "applications/curate/start.md", "applications/curate/start/index.html", "Curate"),
-    Page("Prepare your data", "applications/curate/prepare-data.md", "applications/curate/prepare-data/index.html", "Curate"),
-    Page("Review & export", "applications/curate/review-export.md", "applications/curate/review-export/index.html", "Curate"),
     Page("Example Gallery", "example-gallery.md", "example-gallery/index.html", "Examples"),
     Page("Clinical Data Science", "examples/clinical-data-science.md", "examples/clinical-data-science/index.html", "Examples", parent="example-gallery/index.html"),
     Page("FHIR to Cohort", "examples/fhir-to-cohort.md", "examples/fhir-to-cohort/index.html", "Examples", parent="example-gallery/index.html"),
@@ -216,7 +221,7 @@ SECTION_NAV = {
     ),
     "modules/visualization/index.html": (
         ("Segmentation collages", "generic-segmentation-collage"),
-        ("Curate previews", "curate-preview-preparation"),
+        ("Image previews", "image-preview-preparation"),
         ("Body-region cropping", "body-region-cropping"),
         ("CT/MR difference maps", "volume-difference-heatmaps"),
     ),
@@ -250,28 +255,6 @@ SECTION_NAV = {
         ("XGBoost", "xgboost"),
         ("Cross-validation", "cross-validation"),
         ("External validation", "external-validation-and-calibration"),
-    ),
-    "applications/curate/index.html": (
-        ("Example gallery", "explore-curate-with-example-data"),
-        ("Try the example cohort", "try-the-example-cohort"),
-        ("Citation", "citation"),
-    ),
-    "applications/curate/start/index.html": (
-        ("Install", "install"),
-        ("Stop and restart", "stop-and-restart-safely"),
-        ("Troubleshooting", "troubleshooting"),
-    ),
-    "applications/curate/prepare-data/index.html": (
-        ("Accepted formats", "accepted-uploads-and-preview-limits"),
-        ("Folder layout", "organize-an-image-folder"),
-        ("Bash", "bash"),
-        ("Python", "python"),
-        ("Preview decisions", "understand-what-a-preview-decision-means"),
-    ),
-    "applications/curate/review-export/index.html": (
-        ("Review", "create-and-review-a-cohort"),
-        ("Exports", "choose-an-export"),
-        ("Find files", "locate-exported-files"),
     ),
 }
 
@@ -360,11 +343,17 @@ def inline(text: str, current: Page) -> str:
     return text
 
 
+def _split_table_row(line: str) -> list[str]:
+    """Keep escaped pipe characters inside a Markdown table cell."""
+    return [cell.strip().replace(r"\|", "|") for cell in
+            re.split(r"(?<!\\)\|", line.strip().strip("|"))]
+
+
 def render_table(lines: list[str], current: Page) -> str:
-    headers = [cell.strip() for cell in lines[0].strip().strip("|").split("|")]
+    headers = _split_table_row(lines[0])
     rows = []
     for line in lines[2:]:
-        rows.append([cell.strip() for cell in line.strip().strip("|").split("|")])
+        rows.append(_split_table_row(line))
     out = ["<div class=\"bf-table-wrap\"><table>"]
     out.append("<thead><tr>")
     out.extend(f"<th>{inline(cell, current)}</th>" for cell in headers)
@@ -2288,6 +2277,11 @@ def generate_reference_pages() -> None:
     """Generate exhaustive API reference Markdown before rendering."""
     subprocess.run(
         [sys.executable, str(ROOT / "scripts" / "generate_function_reference.py")],
+        check=True,
+        cwd=ROOT,
+    )
+    subprocess.run(
+        [sys.executable, str(ROOT / "scripts" / "generate_client_parameters.py")],
         check=True,
         cwd=ROOT,
     )

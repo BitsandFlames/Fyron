@@ -1681,7 +1681,7 @@ FHIRRestClient(self, base_url: Optional[str] = None, auth_url: Optional[str] = N
 | `request_params` | no | `Optional[Dict[str, Any]]` | `None` | Default query params merged into every request. |
 | `bearer_token` | no | `Optional[str]` | `None` | Token used for parallel requests (or set FHIR_TOKEN env). |
 | `log_requests` | no | `bool` | `False` | If True, logs request timing and summaries. |
-| `log_request_urls` | no | `bool` | `False` | If True, prints each request URL (with query string) to the console. |
+| `log_request_urls` | no | `bool` | `False` | Compatibility flag for controlled activity events. URLs are never logged. |
 | `extra_headers` | no | `Optional[Dict[str, str]]` | `None` | See signature. |
 | `retries` | no | `Optional[Retry]` | `None` | See signature. |
 | `return_fhir_obj` | no | `bool` | `False` | See signature. |
@@ -2451,7 +2451,7 @@ Lightweight SQL client for FHIR-backed databases.
 **Import path:** `fyron.fhir.sql.FHIRSQLClient`
 
 ```python
-FHIRSQLClient(self, dsn: Optional[str] = None, host: Optional[str] = None, port: Optional[int] = None, dbname: Optional[str] = None, user: Optional[str] = None, password: Optional[str] = None, sslmode: Optional[str] = None, connect_timeout: int = 10, log_queries: bool = False)
+FHIRSQLClient(self, dsn: Optional[str] = None, host: Optional[str] = None, port: Optional[int] = None, dbname: Optional[str] = None, user: Optional[str] = None, password: Optional[str] = None, sslmode: Optional[str] = None, connect_timeout: int = 10, log_queries: bool = False, *, statement_timeout: Optional[float] = None, lock_timeout: Optional[float] = None)
 ```
 
 ### Parameters
@@ -2467,6 +2467,8 @@ FHIRSQLClient(self, dsn: Optional[str] = None, host: Optional[str] = None, port:
 | `sslmode` | no | `Optional[str]` | `None` | See signature. |
 | `connect_timeout` | no | `int` | `10` | See signature. |
 | `log_queries` | no | `bool` | `False` | See signature. |
+| `statement_timeout` | no | `Optional[float]` | `None` | Optional positive query time limit in seconds on parent and worker connections. |
+| `lock_timeout` | no | `Optional[float]` | `None` | Optional positive lock wait limit in seconds; None preserves server settings. Environment variables (optional): - FHIR_DB_DSN - FHIR_DB_HOST - FHIR_DB_PORT - FHIR_DB_NAME - FHIR_DB_USER - FHIR_DB_PASSWORD - FHIR_DB_SSLMODE |
 
 ### Returns
 
@@ -2634,7 +2636,7 @@ Stream partitioned SQL query results to resumable CSV part files.
 **Import path:** `fyron.fhir.sql.FHIRSQLClient.export_query_partitioned`
 
 ```python
-FHIRSQLClient.export_query_partitioned(self, sql: str, output_dir: Union[str, Path], *, start: Union[str, pd.Timestamp], end: Union[str, pd.Timestamp], params: Optional[Dict[str, Any]] = None, frequency: str = 'YS', window_days: Optional[int] = None, param_grid: Optional[Mapping[str, Sequence[Any]]] = None, derived_params: Optional[Mapping[str, Callable[[Dict[str, Any]], Any]]] = None, output_columns: Optional[Sequence[str]] = None, part_filename: str = '{date}.csv', combine_by: Optional[str] = None, combined_filename: str = 'combined_{value}.csv', chunksize: int = 10000, skip_existing: bool = True, continue_on_error: bool = False, rename: Optional[Dict[str, str]] = None) -> pd.DataFrame
+FHIRSQLClient.export_query_partitioned(self, sql: str, output_dir: Union[str, Path], *, start: Union[str, pd.Timestamp], end: Union[str, pd.Timestamp], params: Optional[Dict[str, Any]] = None, frequency: str = 'YS', window_days: Optional[int] = None, param_grid: Optional[Mapping[str, Sequence[Any]]] = None, derived_params: Optional[Mapping[str, Callable[[Dict[str, Any]], Any]]] = None, output_columns: Optional[Sequence[str]] = None, part_filename: str = '{date}.csv', combine_by: Optional[str] = None, combined_filename: str = 'combined_{value}.csv', chunksize: int = 10000, skip_existing: bool = True, continue_on_error: bool = False, rename: Optional[Dict[str, str]] = None, overwrite: bool = False, write_completion_record: bool = True) -> pd.DataFrame
 ```
 
 #### Parameters
@@ -2655,9 +2657,11 @@ FHIRSQLClient.export_query_partitioned(self, sql: str, output_dir: Union[str, Pa
 | `combine_by` | no | `Optional[str]` | `None` | Optional metadata field used to combine parts, such as ``year``. |
 | `combined_filename` | no | `str` | `'combined_{value}.csv'` | Filename template for combined CSVs. |
 | `chunksize` | no | `int` | `10000` | Number of rows per streamed pandas chunk. |
-| `skip_existing` | no | `bool` | `True` | Whether existing non-empty part files are treated as complete. |
+| `skip_existing` | no | `bool` | `True` | Skip only partition files verified against matching completion records. |
 | `continue_on_error` | no | `bool` | `False` | Whether failed partitions should be recorded in the manifest instead of raising immediately. |
 | `rename` | no | `Optional[Dict[str, str]]` | `None` | Optional output column rename mapping. |
+| `overwrite` | no | `bool` | `False` | Intentionally replace existing partitions, including unverified files. skip_existing=False also explicitly allows replacement for compatibility. |
+| `write_completion_record` | no | `bool` | `True` | Write fingerprint-bound completion JSON. False disables new verified skips; unverified existing outputs remain protected. |
 
 #### Returns
 

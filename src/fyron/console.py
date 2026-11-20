@@ -53,7 +53,35 @@ class _ColorFormatter(logging.Formatter):
         return datetime.fromtimestamp(record.created, timezone.utc).isoformat()
 
     def format(self, record: logging.LogRecord) -> str:
-        text = super().format(record)
+        payload = getattr(record, "fyron_event", {})
+        if payload.get("operation") in {"sql", "fhir", "dicom", "documents"}:
+            # Keep structured records unchanged for other handlers and JSON logs.
+            display = logging.makeLogRecord(record.__dict__.copy())
+            label = {"connection": "Connection", "query": "Query",
+                     "dataframe": "DataFrame query", "stream": "Streaming query"}.get(
+                         payload.get("sql_operation"),
+                         {"fhir": "Request", "dicom": "Download", "documents": "Download"}.get(payload["operation"], "Batch"))
+            if payload.get("unit"):
+                label = payload["unit"].capitalize()
+            parts = [f"{payload['operation'].upper()} | {label} {payload.get('stage', 'activity')}"]
+            if "rows" in payload:
+                parts.append(f"{payload['rows']:,} rows")
+            if "chunks" in payload:
+                parts.append(f"{payload['chunks']:,} chunks")
+            if "elapsed_s" in payload:
+                parts.append(f"{payload['elapsed_s']:.3f}s")
+            for name in ("job", "total", "completed", "succeeded", "failed", "skipped", "unfinished", "http_status"):
+                if name in payload:
+                    parts.append(f"{name.replace('_', ' ')}: {payload[name]}")
+            if "error_category" in payload:
+                parts.append(f"category: {payload['error_category']}")
+            if "sql_error" in payload:
+                parts.append(f"reason: {payload['sql_error']}")
+            display.msg = " | ".join(parts)
+            display.args = ()
+            text = super().format(display)
+        else:
+            text = super().format(record)
         if not self.color:
             return text
         level = record.levelname.lower()

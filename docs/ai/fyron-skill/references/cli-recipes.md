@@ -56,11 +56,10 @@ fyron dicom-seg \
   --validate
 ```
 
-Curate previews and app:
+Image previews and app:
 
 ```bash
 fyron dataset-curate-previews --input-dir imaging_exports/ --output-dir curate_previews/
-# Start Curate separately: https://github.com/BitsandFlames/Curate
 ```
 
 BOA:

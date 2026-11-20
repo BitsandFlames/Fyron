@@ -98,7 +98,6 @@
   "fyron.dicom.synthetic.write_synthetic_nifti": "missing parameter descriptions: volume, output_path, reference_image, spacing, origin, direction, dtype, compress, metadata",
   "fyron.documents.client.DocumentDownloader": "missing parameter descriptions: max_workers, retries, save_mode, force_extension",
   "fyron.documents.client.DocumentDownloader.download_id": "missing parameter descriptions: url",
-  "fyron.documents.client.DocumentDownloader.download_urls": "missing parameter descriptions: urls, results_csv",
   "fyron.documents.client.DocumentResult": "missing description",
   "fyron.explainability.inspection.explain_patient_prediction": "missing parameter descriptions: row_col, patient_col, feature_col, contribution_col",
   "fyron.explainability.inspection.partial_dependence_table": "missing parameter descriptions: estimator, X, features, feature_names, grid_resolution",

@@ -59,7 +59,7 @@ Most public names that do not start with `_` are treated as stable once document
 
 Experimental APIs must say so in their docstring and docs page. They should explain what needs validation before study use, for example segmentation label assumptions, FHIR profile assumptions, or model-comparison limitations.
 
-During public beta releases, new workflows can be marked beta when their behavior is useful but still expected to evolve. The beta label should appear in the docs page, CLI help or README section, and release notes. Curate is treated this way because it combines a Python package entrypoint with a local Docker Compose application.
+During public beta releases, new workflows can be marked beta when their behavior is useful but still expected to evolve. The beta label should appear in the docs page, CLI help or README section, and release notes.
 
 ## Deprecation Policy
 
@@ -86,7 +86,6 @@ Before adding a public function, confirm:
 ## Related Pages
 
 - [Using Fyron In Research](repository-trust.md)
-- [Curate](applications/curate.md)
 - [Modules Overview](modules/index.md)
 - [Function Reference](function-reference.md)
 - [Complete Function Reference](reference/index.md)
