@@ -15,6 +15,7 @@ import re
 import shutil
 import subprocess
 import sys
+import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable
@@ -72,6 +73,7 @@ PAGES = [
     Page("FHIR REST", "onboarding/fhir-rest.md", "onboarding/fhir-rest/index.html", "Onboarding"),
     Page("PostgreSQL", "onboarding/sql.md", "onboarding/sql/index.html", "Onboarding"),
     Page("DICOMweb", "onboarding/dicomweb.md", "onboarding/dicomweb/index.html", "Onboarding"),
+    Page("Cohort reconciliation", "onboarding/reconciliation.md", "onboarding/reconciliation/index.html", "Onboarding"),
     Page("Documents", "onboarding/documents.md", "onboarding/documents/index.html", "Onboarding"),
     Page("Unified CLI", "modules/cli.md", "modules/cli/index.html", "CLI"),
     Page("Choose your authentication", "authentication/index.md", "authentication/index.html", "Authentication"),
@@ -115,6 +117,10 @@ PAGES = [
     Page("Explainability", "modules/explainability.md", "modules/explainability/index.html", "Analysis"),
     Page("Cohort Flow Tracking", "modules/flow.md", "modules/flow/index.html", "Analysis"),
     Page("LLM", "modules/llm.md", "modules/llm/index.html", "LLMs/Agents"),
+    Page("Prompt templates and context", "modules/llm/prompts.md", "modules/llm/prompts/index.html", "LLMs/Agents", parent="modules/llm/index.html"),
+    Page("Documents from URLs", "modules/llm/urls.md", "modules/llm/urls/index.html", "LLMs/Agents", parent="modules/llm/index.html"),
+    Page("Grouped summaries", "modules/llm/summaries.md", "modules/llm/summaries/index.html", "LLMs/Agents", parent="modules/llm/index.html"),
+    Page("Build your own agent harness", "modules/llm/harness.md", "modules/llm/harness/index.html", "LLMs/Agents"),
     Page("Skills", "agent-skill.md", "agent-skill/index.html", "LLMs/Agents"),
     Page("SKILL.md", "ai/fyron-skill/SKILL.md", "agents/skill/index.html", "LLMs/Agents"),
     Page("AI Assistant Guide", "agents.md", "agents/index.html", "LLMs/Agents"),
@@ -164,6 +170,14 @@ PAGES = [
 # Curated workflow shortcuts keep long module pages reachable without putting
 # their complete heading lists in the sidebar. Anchors are checked at build time.
 SECTION_NAV = {
+    "modules/llm/harness/index.html": (
+        ("Run the starter", "run-the-starter"),
+        ("Prepare local records", "bring-your-own-local-data"),
+        ("Connect a model", "connect-a-model"),
+        ("Add and test a tool", "register-your-own-function"),
+        ("Connect read-only services", "switch-one-reader-to-a-connected-service"),
+        ("Inspect a stopped run", "when-a-run-stops"),
+    ),
     "modules/llm/index.html": (
         ("Configure LLMAgent", "llmagent"),
         ("Prompts & chat", "prompt-chat"),
@@ -2247,6 +2261,19 @@ JS = r'''(() => {
 def copy_assets() -> None:
     assets_dir = SITE / "assets"
     assets_dir.mkdir(parents=True, exist_ok=True)
+    # Ship only the starter and its named synthetic fixtures.
+    starter = Path("examples/agent_harness")
+    files = [starter / name for name in (
+        "run.py", "readers.py", "demo_data/fhir/studies.bundle.json",
+        "demo_data/tables/encounters.csv", "demo_data/documents/manifest.csv",
+        "demo_data/documents/report-a.txt", "demo_data/documents/discharge-b.txt",
+        "demo_data/documents/report-c.txt",
+    )]
+    with zipfile.ZipFile(assets_dir / "research-agent-starter.zip", "w", zipfile.ZIP_DEFLATED) as archive:
+        for path in [*files, Path("LICENSE"), Path("NOTICE")]:
+            archive.write(ROOT / path, path)
+    shutil.copy2(ROOT / "examples/cohort_reconciliation.py", assets_dir / "cohort_reconciliation.py")
+    shutil.copy2(DOCS.parent / "examples/research_prompts.json", assets_dir / "research_prompts.json")
     for source in (DOCS / "assets").glob("*"):
         if source.is_file():
             shutil.copy2(source, assets_dir / source.name)

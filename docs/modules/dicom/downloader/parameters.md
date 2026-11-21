@@ -4,7 +4,7 @@
 
 Use this page when you know the operation and need every argument, its actual Python default and its interactions. Signatures and parameter coverage are generated from the current source; descriptions explain operational choices.
 
-**Version scope:** Fyron 0.3.20b5 (Beta 5). The reporting, deadline, naming and validation options below require Beta 5 or newer; they are not available in previously published Beta 4 packages.
+**Version scope:** Fyron 0.3.20b6 (Beta 6). The reporting, deadline, naming and validation options below require Beta 5 or newer; they are not available in previously published Beta 4 packages.
 
 ## Reading the tables
 

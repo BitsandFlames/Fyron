@@ -1,6 +1,6 @@
 # FHIR SQL
 
-**Version scope:** Fyron 0.3.20b5 (Beta 5). Reporting, timeout, validation and naming additions described here require Beta 5 or newer.
+**Version scope:** Fyron 0.3.20b6 (Beta 6). Reporting, timeout, validation and naming additions described here require Beta 5 or newer.
 
 ## Find the right operation
 

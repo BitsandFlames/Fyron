@@ -40,6 +40,7 @@ class DocumentDownloadError(RuntimeError):
 
 
 _DOCUMENT_HINTS = {
+    "download_too_large": "Document exceeds the configured byte limit.",
     "content": "Unexpected document content type; check the endpoint and authentication.",
     "pdf": "Expected an HTTP 200 PDF response; check the endpoint, authentication and content type.",
     "signature": "The response has no PDF signature; it may be a login page or invalid document.",
@@ -68,6 +69,7 @@ class DocumentResult:
     error: Optional[str] = None
     skipped: bool = False
     document_id: Optional[str] = None
+    reason: Optional[str] = None
 
 
 class DocumentDownloader:
@@ -96,6 +98,8 @@ class DocumentDownloader:
     write_completion_record:
         Write a hidden JSON record for verified restarts. If False, newly saved
         files cannot be skipped on subsequent runs without an existing valid record.
+    max_download_bytes:
+        Optional positive limit on decoded response bytes per document.
     expected_content_types:
         Optional exact MIME types permitted for downloads, e.g. ["text/plain"].
     flat_output:
@@ -122,10 +126,14 @@ class DocumentDownloader:
         write_completion_record: bool = True,
         flat_output: bool = False,
         expected_content_types: Optional[Sequence[str]] = None,
+        max_download_bytes: Optional[int] = None,
     ) -> None:
         """Initialize the document downloader."""
         if isinstance(timeout, bool) or not math.isfinite(timeout) or timeout <= 0:
             raise ValueError("timeout must be a positive finite number.")
+        if max_download_bytes is not None and (type(max_download_bytes) is not int or max_download_bytes < 1):
+            raise ValueError("max_download_bytes must be a positive integer.")
+        self.max_download_bytes = max_download_bytes
         self.expected_content_types = _normalize_content_types(expected_content_types, require_pdf)
         self.base_url = base_url or os.environ.get("FHIR_BASE_URL")
         self.output_dir = pathlib.Path(output_dir)
@@ -244,6 +252,8 @@ class DocumentDownloader:
             completion_key += f":id={chosen_id}"
         if self.expected_content_types is not None:
             completion_key += ":content=" + ",".join(sorted(self.expected_content_types))
+        if self.max_download_bytes is not None:
+            completion_key += f":bytes={self.max_download_bytes}"
         existing = verified_files(target_dir, completion_key) if self.skip_existing else []
         if existing:
             if self.log_downloads:
@@ -286,6 +296,10 @@ class DocumentDownloader:
                     )
                 if target_path.parent != target_dir or target_path.name in {"", ".", ".."}:
                     raise _DocumentValidationError("destination")
+                length = resp.headers.get("Content-Length")
+                cap = self.max_download_bytes
+                if cap is not None and length is not None and not resp.headers.get("Content-Encoding") and int(length) > cap:
+                    raise _DocumentValidationError("download_too_large")
                 hasher = hashlib.sha256()
                 with tempfile.TemporaryDirectory(prefix=".fyron-stage-", dir=target_dir) as staging:
                     size = 0
@@ -294,6 +308,8 @@ class DocumentDownloader:
                         for chunk in resp.iter_content(chunk_size=1024 * 1024):
                             check_cancelled(cancellation)
                             if chunk:
+                                if cap is not None and size + len(chunk) > cap:
+                                    raise _DocumentValidationError("download_too_large")
                                 if self.require_pdf and len(prefix) < 5:
                                     prefix += chunk[:5 - len(prefix)]
                                     if len(prefix) == 5 and prefix != b"%PDF-":
@@ -347,7 +363,11 @@ class DocumentDownloader:
             message = ("Existing output is unverified; review it before using skip_existing=False."
                        if isinstance(exc, FileExistsError) else
                        (_DOCUMENT_HINTS[exc.reason] if isinstance(exc, _DocumentValidationError) else safe_error(exc)))
-            return DocumentResult(full_url, download_id, str(target_path), status, content_type, None, message, document_id=chosen_id)
+            reason = "download_failed"
+            if isinstance(exc, _DocumentValidationError):
+                reason = {"content": "unsupported_media_type", "download_too_large": "download_too_large"}.get(exc.reason, reason)
+            return DocumentResult(full_url, download_id, str(target_path), status, content_type, None,
+                                  message, document_id=chosen_id, reason=reason)
         finally:
             if self.log_downloads:
                 event(logger, "documents", "finished" if 'message' not in locals() else "failed",

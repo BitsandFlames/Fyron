@@ -11,7 +11,7 @@ This first walkthrough uses three invented patient IDs. Choose **one** query rou
 Install Fyron in your project:
 
 ```bash
-uv add "fyron==0.3.20b5"
+uv add "fyron==0.3.20b6"
 ```
 
 Use Python 3.11+ and your administrator's approved access settings. All IDs and values below are synthetic. The HTTP route needs your own permitted service and matching IDs. The SQL route runs invented rows on your PostgreSQL connection without creating tables.
@@ -219,3 +219,5 @@ From here you can combine another CSV, apply an explicit cohort filter, prepare 
 - [Descriptive analysis](../modules/descriptive.md): summarize the prepared table.
 
 Start with one query and inspect the resulting DataFrame. Add the next step when the identifiers and rows make sense.
+
+See [Reconcile a document cohort and retry a failed download](reconciliation.md) for the five-patient offline walkthrough.

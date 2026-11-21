@@ -4,7 +4,7 @@
 
 Use this page when you know the operation and need every argument, its actual Python default and its interactions. Signatures and parameter coverage are generated from the current source; descriptions explain operational choices.
 
-**Version scope:** Fyron 0.3.20b5 (Beta 5). The reporting, deadline, naming and validation options below require Beta 5 or newer; they are not available in previously published Beta 4 packages.
+**Version scope:** Fyron 0.3.20b6 (Beta 6). The reporting, deadline, naming and validation options below require Beta 5 or newer; they are not available in previously published Beta 4 packages.
 
 ## Reading the tables
 
@@ -48,6 +48,7 @@ def DocumentDownloader(
     write_completion_record=True,
     flat_output=False,
     expected_content_types=None,
+    max_download_bytes=None,
 ):
     ...
 ```
@@ -70,6 +71,7 @@ def DocumentDownloader(
 | `write_completion_record` (keyword only) | `bool` | `True` | Write new hidden JSON completion records for verified restarts. False omits new records; it neither deletes existing JSON nor disables token caching. |
 | `flat_output` (keyword only) | `bool` | `False` | True writes custom-ID/hash-named files directly in output_dir with absolute result paths. False uses a document subfolder. Explicit output_path overrides both. |
 | `expected_content_types` (keyword only) | `Optional[Sequence[str]]` | `None` | Optional nonempty sequence of exact MIME types, e.g. `["text/plain", "application/pdf"]`. Comparison ignores response charset/case. No wildcards. A PDF requirement must remain compatible. |
+| `max_download_bytes` (keyword only) | `Optional[int]` | `None` | Beta 6: optional positive limit on decoded response bytes per document. The default permits any size. |
 
 ## close
 

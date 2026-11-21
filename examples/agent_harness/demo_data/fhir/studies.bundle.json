@@ -1,0 +1,4 @@
+{"resourceType":"Bundle","type":"collection","entry":[
+  {"resource":{"resourceType":"ImagingStudy","id":"study-a","status":"available","subject":{"reference":"Patient/0007"},"started":"2025-01-01"}},
+  {"resource":{"resourceType":"ImagingStudy","id":"study-b","status":"available","subject":{"reference":"Patient/0008"},"started":"2025-02-01"}}
+]}

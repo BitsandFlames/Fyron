@@ -14,7 +14,7 @@ Use this page for exact call signatures. Use the linked module guides for input 
 - [Cohort And Analysis Reference](cohort-analysis.md): 74 top-level public APIs.
 - [Survival Reference](survival.md): 21 top-level public APIs.
 - [ML, Validation, And Explainability Reference](ml-validation.md): 97 top-level public APIs.
-- [Core, Publication, And Utility Reference](core-publication.md): 98 top-level public APIs.
+- [Core, Publication, And Utility Reference](core-publication.md): 99 top-level public APIs.
 
 ## Public API Index
 
@@ -539,6 +539,8 @@ Use this page for exact call signatures. Use the linked module guides for input 
 - [`fyron.llm.agent.LLMAgent`](core-publication.md#fyronllmagentllmagent)
 - [`fyron.llm.agent.LLMAgent.prompt`](core-publication.md#fyronllmagentllmagentprompt)
 - [`fyron.llm.agent.LLMAgent.chat`](core-publication.md#fyronllmagentllmagentchat)
+- [`fyron.llm.agent.LLMAgent.run_prompts_on_dataframe`](core-publication.md#fyronllmagentllmagentrunpromptsondataframe)
+- [`fyron.llm.agent.LLMAgent.summarize_dataframe`](core-publication.md#fyronllmagentllmagentsummarizedataframe)
 - [`fyron.llm.agent.LLMAgent.run_on_dataframe`](core-publication.md#fyronllmagentllmagentrunondataframe)
 - [`fyron.llm.agent.LLMAgent.run_on_documents`](core-publication.md#fyronllmagentllmagentrunondocuments)
 - [`fyron.llm.agent.LLMAgent.prompt_documents`](core-publication.md#fyronllmagentllmagentpromptdocuments)
@@ -549,6 +551,7 @@ Use this page for exact call signatures. Use the linked module guides for input 
 - [`fyron.llm.agent.LLMAgent.run_on_directory`](core-publication.md#fyronllmagentllmagentrunondirectory)
 - [`fyron.llm.agent.LLMAgent.prompt_directory`](core-publication.md#fyronllmagentllmagentpromptdirectory)
 - [`fyron.llm.agent.LLMConfig`](core-publication.md#fyronllmagentllmconfig)
+- [`fyron.llm.workflows.load_prompt_templates`](core-publication.md#fyronllmworkflowsloadprompttemplates)
 - [`fyron.plotting_palettes.PaletteSpec`](core-publication.md#fyronplottingpalettespalettespec)
 - [`fyron.plotting_palettes.get_colormap`](core-publication.md#fyronplottingpalettesgetcolormap)
 - [`fyron.plotting_palettes.get_palette`](core-publication.md#fyronplottingpalettesgetpalette)

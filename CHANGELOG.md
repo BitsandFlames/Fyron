@@ -1,14 +1,14 @@
 # Changelog
 
-## 0.3.20b5 - 2026-11-20
+## 0.3.20b6
 
-- Improve FHIR REST, PostgreSQL, DICOMweb and document extraction diagnostics and failure handling.
-- Verify SQL export restarts against query/config fingerprints and file digests, preserving identifier text in combined CSVs.
-- Add optional SQL statement/lock timeouts and DICOM request/worker deadlines.
-- Add exact study-folder labels, optional DICOM completion JSON, stricter instance validation and parent-owned worker staging cleanup.
-- Add ordered optional download task reports, bounded document scheduling, cancellation and MIME constraints.
-- Preserve borrowed HTTP sessions and protect upstream transport/parser diagnostics.
-- Add hands-on REST/SQL/download onboarding and complete client parameter references generated from source.
-- Complete current-source documentation cleanup for the separate Curate companion application.
+Released November 21, 2026 under CC BY-NC 4.0. Python 3.11+ is required.
 
-Historical Beta 4 release notes remain in the documentation.
+- Run named JSON prompt templates on DataFrame text or document URLs. Select context columns, combine records by patient or encounter, and summarize reviewed answers with source mappings.
+- Process model requests concurrently with bounded workers. Per-document download and extraction limits protect URL workflows. Inspect controlled failure reasons and selectively retry failed documents.
+- Build a research agent using the downloadable starter, synthetic local records and optional read-only FHIR REST, SQL and document readers.
+- Follow the five-patient reconciliation example to distinguish missing records, unreadable documents and completed summaries.
+
+## Upgrade notes
+
+Single-prompt workflows remain available. Direct document downloads have an optional byte cap, unlimited by default. URL prompt workflows default to 5,000,000 decoded bytes and 100,000 extracted characters per document. Text-bearing PDFs require Poppler’s pdftotext executable. Source prompt names must match the supplied nonempty answer table.

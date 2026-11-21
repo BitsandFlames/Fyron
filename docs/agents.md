@@ -8,6 +8,8 @@ If your assistant supports reusable skills or project knowledge, install the [Fy
 
 Read the packaged [SKILL.md](ai/fyron-skill/SKILL.md) to inspect the instructions. For prompts executed from Python over text, files, or tables, use the [LLM module](modules/llm.md).
 
+Build a Python agent that chooses among your own functions and Fyron readers. [Hands-on harness guide](modules/llm/harness.md)
+
 ## Quick Start Prompt
 
 Copy this into your assistant before asking for code:

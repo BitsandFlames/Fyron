@@ -10,7 +10,7 @@ def _get_version() -> str:
         from importlib.metadata import version
         return version("fyron")
     except Exception:
-        return "0.3.20b5"
+        return "0.3.20b6"
 
 
 def get_banner(

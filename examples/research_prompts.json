@@ -1,0 +1,17 @@
+{
+  "prompts": [
+    {
+      "name": "findings",
+      "categories": ["radiology"],
+      "prompt": "Extract the findings explicitly documented in the report."
+    },
+    {
+      "name": "follow_up",
+      "prompt": "Extract each follow-up recommendation and quote its supporting sentence."
+    },
+    {
+      "name": "timeline",
+      "prompt": "Summarize the supplied material chronologically. Cite each source label and preserve disagreements."
+    }
+  ]
+}

@@ -1,12 +1,18 @@
 # LLM
 
-`fyron.llm` provides a lightweight interface for prompts over text, files, images, DataFrames, and directories. It is designed for narrative assistance, extraction prototypes, and methods-documentation support. Keep statistical analysis and clinical decisions in explicit code.
+Use `LLMAgent` to ask a question about one document, extract the same evidence across a cohort, or summarize several records for a patient. Configure an approved model endpoint before sending research documents. Review generated answers against their sources before using them as research labels.
 
-Treat LLM outputs as generated annotations that need review. The module is most useful for summarizing documents, drafting methods text, extracting candidate labels for later validation, or applying the same prompt across a DataFrame. Keep prompts versioned and store outputs next to the input identifiers.
+Build a Python agent that chooses among your own functions and Fyron readers. [Hands-on harness guide](llm/harness.md)
 
-DataFrame batch prompts preserve original column names, including spaces. Directory batches return filename keys and reject duplicate basenames in recursive searches before sending requests. In `mode="auto"`, ordinary text files use the text route.
+## Document workflows
 
-Requests-based FHIR, DICOMweb, document, and LLM clients follow redirects only within the same scheme, host, and port. Cross-origin redirects, HTTPS downgrades, and URLs containing user credentials are blocked before forwarding request bodies or custom authentication headers. Configure the approved final endpoint directly when a service redirects elsewhere. This guard is also installed on supplied sessions, while preserving existing response hooks.
+| I want to… | Start here |
+| --- | --- |
+| Ask several questions per report or add a date to the prompt | [Prompt templates and context](llm/prompts.md) |
+| Start with a column of links to text files or PDFs | [Documents from URLs](llm/urls.md) |
+| Create a patient timeline or combine reviewed answers | [Grouped summaries](llm/summaries.md) |
+
+These three workflows are available in Beta 6. The single-prompt methods below are also available in Beta 5.
 
 ## LLMs and Agents
 
@@ -170,3 +176,15 @@ Alias: `run_on_directory`.
 - Use `output_csv` for batch prompts so runs are auditable.
 - Keep prompts version-controlled when using LLM outputs in research workflows.
 - Treat LLM outputs as extracted/narrative assistance, not ground truth.
+
+## Ask several questions per document
+
+Choose named questions, filter by document category and control the metadata sent with each text. [Prompt templates and context](llm/prompts.md)
+
+## Summarize original documents or reviewed answers
+
+Group by patient, encounter or category and inspect each summary’s contributing sources. [Grouped summaries](llm/summaries.md)
+
+## Start from a document URL column
+
+Fetch plain text and text-bearing PDFs from public or authenticated document services. [Documents from URLs](llm/urls.md)

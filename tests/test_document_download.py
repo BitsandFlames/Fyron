@@ -375,3 +375,22 @@ def test_cli_cancellation_and_sensitive_error_are_controlled(tmp_path, monkeypat
         raise KeyboardInterrupt
     monkeypatch.setattr(_cli, "DocumentDownloader", cancel)
     assert main(args) == 130
+
+
+@pytest.mark.parametrize("headers", [{}, {"Content-Length": "1"}, {"Content-Encoding": "gzip", "Content-Length": "1"}])
+def test_byte_limit_counts_streamed_content(tmp_path, headers):
+    downloader, _ = client(tmp_path, DocumentAdapter(headers=headers, chunks=lambda: [b"ab", b"cd"]),
+                           max_download_bytes=3, skip_existing=False)
+    destination = tmp_path / "prior.pdf"
+    destination.write_bytes(b"prior")
+    result = downloader.download_url(URL, output_path=destination)
+    assert result.reason == "download_too_large"
+    assert destination.read_bytes() == b"prior" and list(tmp_path.iterdir()) == [destination]
+
+
+def test_byte_limit_checks_header_before_stream(tmp_path):
+    downloader, _ = client(tmp_path, DocumentAdapter(headers={"Content-Length": "4"},
+                           chunks=lambda: pytest.fail("read oversized response")), max_download_bytes=3)
+    assert downloader.download_url(URL).reason == "download_too_large"
+    exact, _ = client(tmp_path, DocumentAdapter(headers={"Content-Length": "3"}, body=b"abc"), max_download_bytes=3)
+    assert Path(exact.download_url(URL).path).read_bytes() == b"abc"

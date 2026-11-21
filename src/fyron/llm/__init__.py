@@ -2,4 +2,6 @@
 
 from .agent import LLMAgent
 
-__all__ = ["LLMAgent"]
+from .workflows import load_prompt_templates
+
+__all__ = ["LLMAgent", "load_prompt_templates"]

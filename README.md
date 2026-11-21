@@ -1,7 +1,7 @@
 ![Fyron: a fireplace for research. Pixel-art researchers and developers gathered around a campfire.](https://raw.githubusercontent.com/BitsandFlames/Fyron/main/docs/assets/fyron-banner.png)
 
 <p align="center">
-  <a href="https://github.com/BitsandFlames/Fyron/releases/tag/v0.3.20b5"><img alt="Fyron 0.3.20b5 · beta" src="https://img.shields.io/badge/release-0.3.20b5%20%C2%B7%20beta-FF6A1A" /></a>
+  <a href="https://github.com/BitsandFlames/Fyron/releases/tag/v0.3.20b6"><img alt="Fyron 0.3.20b6 · beta" src="https://img.shields.io/badge/release-0.3.20b6%20%C2%B7%20beta-FF6A1A" /></a>
   <img alt="Supported Python versions" src="https://img.shields.io/pypi/pyversions/fyron?color=3776AB" />
   <img alt="CC BY-NC 4.0 license" src="https://img.shields.io/badge/license-CC_BY--NC_4.0-8B5CF6" />
 </p>
@@ -73,10 +73,10 @@ Start with a single helper or put together a whole workflow. The synthetic examp
 Add Fyron to your project with **Python 3.11+**:
 
 ```bash
-uv add "fyron==0.3.20b5"
+uv add "fyron==0.3.20b6"
 ```
 
-This release is **0.3.20 Beta 5**. Pin your study's version and review methods and outputs for your research question. Software checks do not replace scientific validation.
+This release is **0.3.20 Beta 6**. Pin your study's version and review methods and outputs for your research question. Software checks do not replace scientific validation.
 
 Current Fyron source is **available under CC BY-NC 4.0** for noncommercial use with attribution. Commercial use beyond existing permissions requires separate permission.
 
@@ -85,14 +85,14 @@ Current Fyron source is **available under CC BY-NC 4.0** for noncommercial use w
 CC BY-NC 4.0 requires appropriate attribution, a license link, and an indication of changes when sharing adapted material. For research using Fyron, cite the version used in your study:
 
 > René Hosch, Katarzyna Borys, Sina Warmer, Jannis Straus, Kamyar Hartmann, and Justin Woolley (2026).
-> **Fyron** (Version 0.3.20b5) [Computer software]. Bits & Flames.
+> **Fyron** (Version 0.3.20b6) [Computer software]. Bits & Flames.
 
 ```bibtex
 @software{hosch_fyron_2026,
   author = {Hosch, Ren{\'e} and Borys, Katarzyna and Warmer, Sina and Straus, Jannis and Hartmann, Kamyar and Woolley, Justin},
   title = {Fyron: An Open Research Companion for Healthcare Interoperability, Data Science and AI},
   year = {2026},
-  version = {0.3.20b5},
+  version = {0.3.20b6},
   url = {https://github.com/bitsandflames/fyron}
 }
 ```

@@ -1,8 +1,8 @@
 cff-version: 1.2.0
 message: "If you use Fyron in research, please cite the software using this metadata."
 title: "Fyron: An Open Research Companion for Healthcare Interoperability, Data Science and AI"
-version: "0.3.20b5"
-date-released: "2026-11-20"
+version: "0.3.20b6"
+date-released: "2026-11-21"
 type: software
 license: CC-BY-NC-4.0
 authors:

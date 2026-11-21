@@ -1,0 +1,4 @@
+patient_id,label,category,date,path
+0007,D1,radiology,2025-01-01,report-a.txt
+0007,D2,discharge,2025-01-08,discharge-b.txt
+0008,D1,radiology,2025-02-01,report-c.txt

@@ -8,13 +8,13 @@
     </div>
     <div class="bf-code bf-hero-install">
       <div class="bf-code__bar"><strong>Bash</strong><span>Python 3.11+</span></div>
-      <pre><code class="language-bash">uv add &quot;fyron==0.3.20b5&quot;</code></pre>
+      <pre><code class="language-bash">uv add &quot;fyron==0.3.20b6&quot;</code></pre>
     </div>
   </div>
 
 <aside class="bf-release-note" aria-label="Latest release">
-  <a href="releases/v0.3.20b5/">v0.3.20b5 <span class="bf-pixel-arrow" aria-hidden="true"></span></a>
-  <p>Reliable FHIR, SQL, DICOM and document workflows, optional download reports, exact study-folder names and complete client parameter guides. Python 3.11+ is required. Read the release notes for changes and upgrade guidance.</p>
+  <a href="releases/v0.3.20b6/">v0.3.20b6 <span class="bf-pixel-arrow" aria-hidden="true"></span></a>
+  <p>Run named prompts across documents, summarize reviewed evidence by patient, and retry failed downloads with source-level reasons. Python 3.11+ is required. Read the release notes for changes and upgrade guidance.</p>
 </aside>
 
 <p class="bf-shared-intro">Fyron is a modular Python toolkit for healthcare data, medical imaging, and scientific analysis. Work with familiar DataFrames, arrays, and file paths to build workflows whose inputs, assumptions, and results remain inspectable.</p>
@@ -65,7 +65,7 @@ Fyron supports research; it does not replace clinical validation, privacy review
 Please cite the Fyron version used in your paper, thesis, or other scientific work.
 
 <div class="bf-citation">
-<p>René Hosch, Katarzyna Borys, Sina Warmer, Jannis Straus, Kamyar Hartmann, and Justin Woolley (2026). <em>Fyron: An Open Research Companion for Healthcare Interoperability, Data Science and AI.</em> Version 0.3.20b5 [Computer software].</p>
+<p>René Hosch, Katarzyna Borys, Sina Warmer, Jannis Straus, Kamyar Hartmann, and Justin Woolley (2026). <em>Fyron: An Open Research Companion for Healthcare Interoperability, Data Science and AI.</em> Version 0.3.20b6 [Computer software].</p>
 <details class="bf-citation-bibtex">
 <summary>BibTeX</summary>
 
@@ -74,7 +74,7 @@ Please cite the Fyron version used in your paper, thesis, or other scientific wo
   author = {Hosch, Ren{\'e} and Borys, Katarzyna and Warmer, Sina and Straus, Jannis and Hartmann, Kamyar and Woolley, Justin},
   title = {Fyron: An Open Research Companion for Healthcare Interoperability, Data Science and AI},
   year = {2026},
-  version = {0.3.20b5},
+  version = {0.3.20b6},
   url = {https://github.com/bitsandflames/fyron}
 }
 ```

@@ -108,3 +108,5 @@ For exact custom names without new JSON records, use `id_col` together with
 ## Reliability in current source
 
 For text endpoints, `expected_content_types=["text/plain"]` rejects unexpected HTML. Batch `return_report=True` adds task counts without changing the default DataFrame return. These options are included in Beta 5.
+
+See [Reconcile a document cohort and retry a failed download](reconciliation.md) for the five-patient offline walkthrough.

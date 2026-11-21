@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from .._diagnostics import event, safe_error, batch_report, error_event, task_outcome
 from .._http import guard_redirects
+from .workflows import _run, _names
 
 import base64
+import copy
 import json
 import logging
 import os
@@ -156,6 +158,123 @@ class LLMAgent:
             file_path=file_path,
             mode=mode,
         )
+
+    def _workflow_worker(self):
+        """Create an independent HTTP client using the configured endpoint and headers."""
+        worker = copy.copy(self)
+        worker.session = guard_redirects(requests.Session())
+        worker.session.headers = self.session.headers.copy()
+        return worker
+
+    @batch_report("llm")
+    def run_prompts_on_dataframe(
+        self, df, *, text_col=None, url_col=None, document_id_col=None, prompts, prompt_names=None,
+        document_auth=None, document_origin=None, max_download_bytes=5_000_000, max_extracted_chars=100_000,
+        category_col=None, group_cols=None, order_by=None, context_cols=None,
+        keep_cols=None, max_input_chars=100_000, max_workers=1,
+    ):
+        """Apply selected templates independently to documents or groups.
+
+        Parameters
+        ----------
+        df:
+            Input document table.
+        text_col:
+            Column containing document text, as an alternative to url_col.
+        url_col:
+            Column of absolute document URLs serving plain text or text-bearing PDFs.
+        max_download_bytes:
+            Maximum decoded bytes fetched per URL.
+        max_extracted_chars:
+            Maximum extracted characters per URL before prompt assembly.
+        document_auth:
+            Optional document-service Auth or requests.Session, independent of model credentials.
+        document_origin:
+            Allowed document origin, required with authentication (HTTPS).
+        document_id_col:
+            Unique nonmissing identifier. In URL mode the URL is the default local identifier.
+        prompts:
+            JSON path, prompts mapping or list of template definitions.
+        prompt_names:
+            Optional ordered selection of templates.
+        category_col:
+            Column used to filter documents for category-specific templates.
+        group_cols:
+            Optional grouping columns. Omit for independent documents.
+        order_by:
+            Optional column for stable ascending source order.
+        context_cols:
+            Columns explicitly sent as context alongside each text.
+        keep_cols:
+            Metadata retained locally, as ordered lists for grouped results.
+        max_workers:
+            Maximum concurrent requests using independent HTTP sessions. One runs sequentially.
+        max_input_chars:
+            Maximum characters per rendered request, including the instruction.
+
+        Returns
+        -------
+        pandas.DataFrame
+            One row per applicable prompt and document or group with answer, status and sources.
+        """
+        return _run(self, df, text_col=text_col, document_id_col=document_id_col,
+                    max_download_bytes=max_download_bytes, max_extracted_chars=max_extracted_chars,
+                    url_col=url_col, document_auth=document_auth, document_origin=document_origin,
+                    prompts=prompts, prompt_names=prompt_names, category_col=category_col,
+                    group_cols=group_cols, order_by=order_by, context_cols=context_cols,
+                    keep_cols=keep_cols, max_input_chars=max_input_chars, max_workers=max_workers)
+
+    @batch_report("llm")
+    def summarize_dataframe(
+        self, answers, *, group_cols, prompts, prompt_names=None, source_prompt_names=None,
+        category_col=None, order_by=None, context_cols=None, allow_partial=False,
+        max_input_chars=100_000, max_workers=1,
+    ):
+        """Summarize selected prior answers and retain their source mappings.
+
+        Parameters
+        ----------
+        answers:
+            Reviewed workflow result table with original status and sources.
+        group_cols:
+            Nonmissing columns defining each independent summary group.
+        prompts:
+            Summary template pack or JSON path.
+        prompt_names:
+            Optional selection of summary templates.
+        source_prompt_names:
+            Optional list of extraction prompts whose answers contribute.
+        category_col:
+            Optional category column for summary template filters.
+        order_by:
+            Optional column for stable ascending evidence order.
+        context_cols:
+            Optional columns explicitly sent alongside answers.
+        allow_partial:
+            Allow a marked partial summary from usable answers after input failures.
+        max_workers:
+            Maximum concurrent requests using independent HTTP sessions. One runs sequentially.
+        max_input_chars:
+            Maximum characters per rendered request.
+
+        Returns
+        -------
+        pandas.DataFrame
+            Summary answers and status with nested source mappings.
+        """
+        if source_prompt_names is not None:
+            names = _names(source_prompt_names)
+            if not names or "prompt_name" not in answers or not answers.columns.is_unique:
+                raise ValueError("Expected source prompt names and a valid answer table.")
+            available = set(answers["prompt_name"].dropna())
+            unknown = sorted(set(names) - available)
+            if not answers.empty and unknown:
+                raise ValueError(f"Unknown source prompts: {unknown}. Available: {sorted(available)}.")
+            answers = answers[answers["prompt_name"].isin(names)]
+        return _run(self, answers, text_col="answer", document_id_col=None, prompts=prompts,
+                    prompt_names=prompt_names, category_col=category_col, group_cols=group_cols,
+                    order_by=order_by, context_cols=context_cols, keep_cols=None,
+                    max_input_chars=max_input_chars, max_workers=max_workers, summary=True, allow_partial=allow_partial)
 
     @batch_report("llm")
     def run_on_dataframe(

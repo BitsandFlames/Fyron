@@ -461,3 +461,10 @@ client argument, default, keyword-only binding and operational choice. Signature
 are generated from source by `scripts/generate_client_parameters.py`; update its
 behavior descriptions when changing client options. Run it with `--check` to
 verify synchronization. The documentation build regenerates these pages.
+
+Use `fyron.llm.load_prompt_templates` and `LLMAgent.run_prompts_on_dataframe` for
+named text prompts or grouped documents. Only explicitly selected context columns
+accompany text. Keep identifiers in local metadata. Use `summarize_dataframe`
+for reviewed answers, retain unsuccessful rows and inspect statuses and source
+mappings. Both methods default to sequential requests; `max_workers` enables
+bounded parallel HTTP requests with independent worker sessions.

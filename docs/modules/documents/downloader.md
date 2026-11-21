@@ -1,6 +1,6 @@
 # DocumentDownloader
 
-**Version scope:** Fyron 0.3.20b5 (Beta 5). Reporting, timeout, validation and naming additions described here require Beta 5 or newer.
+**Version scope:** Fyron 0.3.20b6 (Beta 6). Reporting, timeout, validation and naming additions described here require Beta 5 or newer.
 
 ## Find the right operation
 
@@ -695,3 +695,7 @@ For Python, configure `fyron.console.configure_logging` and `log_downloads=True`
 for colored timing/status output, or JSON logging for schedulers. Progress bars
 are opt-in with `show_progress=True`. CLI quiet, JSON-log and no-progress modes
 disable bars. All displayed diagnostics are controlled; remote text is excluded.
+
+See [Reconcile a document cohort and retry a failed download](../../onboarding/reconciliation.md) for the five-patient offline walkthrough.
+
+Set `DocumentDownloader(max_download_bytes=5_000_000)` to cap each document at five million decoded bytes. An oversized uncompressed Content-Length is rejected before streaming. The downloader also checks each decoded chunk before writing it. A failed transfer leaves the existing destination in place. Inspect `result.reason` for `download_too_large`, `unsupported_media_type` or `download_failed`.

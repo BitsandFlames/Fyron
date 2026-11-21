@@ -99,7 +99,7 @@ def _installed_version() -> str:
     try:
         return package_version("fyron")
     except PackageNotFoundError:
-        return "0.3.20b5"
+        return "0.3.20b6"
 
 
 def get_banner(

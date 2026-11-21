@@ -133,6 +133,8 @@ For workflow context, see [Core, Publication, And Utility module guide](../modul
 - [`fyron.llm.agent.LLMAgent`](#fyronllmagentllmagent)
 - [`fyron.llm.agent.LLMAgent.prompt`](#fyronllmagentllmagentprompt)
 - [`fyron.llm.agent.LLMAgent.chat`](#fyronllmagentllmagentchat)
+- [`fyron.llm.agent.LLMAgent.run_prompts_on_dataframe`](#fyronllmagentllmagentrunpromptsondataframe)
+- [`fyron.llm.agent.LLMAgent.summarize_dataframe`](#fyronllmagentllmagentsummarizedataframe)
 - [`fyron.llm.agent.LLMAgent.run_on_dataframe`](#fyronllmagentllmagentrunondataframe)
 - [`fyron.llm.agent.LLMAgent.run_on_documents`](#fyronllmagentllmagentrunondocuments)
 - [`fyron.llm.agent.LLMAgent.prompt_documents`](#fyronllmagentllmagentpromptdocuments)
@@ -143,6 +145,7 @@ For workflow context, see [Core, Publication, And Utility module guide](../modul
 - [`fyron.llm.agent.LLMAgent.run_on_directory`](#fyronllmagentllmagentrunondirectory)
 - [`fyron.llm.agent.LLMAgent.prompt_directory`](#fyronllmagentllmagentpromptdirectory)
 - [`fyron.llm.agent.LLMConfig`](#fyronllmagentllmconfig)
+- [`fyron.llm.workflows.load_prompt_templates`](#fyronllmworkflowsloadprompttemplates)
 - [`fyron.plotting_palettes.PaletteSpec`](#fyronplottingpalettespalettespec)
 - [`fyron.plotting_palettes.get_colormap`](#fyronplottingpalettesgetcolormap)
 - [`fyron.plotting_palettes.get_palette`](#fyronplottingpalettesgetpalette)
@@ -2929,7 +2932,7 @@ Download documents from URLs into a deterministic folder structure.
 **Import path:** `fyron.documents.client.DocumentDownloader`
 
 ```python
-DocumentDownloader(self, auth: Optional[Union[Auth, requests.Session]] = None, base_url: Optional[str] = None, output_dir: Union[str, pathlib.Path] = 'documents_out', timeout: int = 30, skip_existing: bool = True, log_downloads: bool = False, max_workers: int = 4, retries: Optional[Retry] = None, save_mode: str = 'auto', force_extension: Optional[str] = None, basic_auth: Optional[Tuple[str, str]] = None, *, require_pdf: bool = False, allow_redirects: bool = True, write_completion_record: bool = True, flat_output: bool = False, expected_content_types: Optional[Sequence[str]] = None)
+DocumentDownloader(self, auth: Optional[Union[Auth, requests.Session]] = None, base_url: Optional[str] = None, output_dir: Union[str, pathlib.Path] = 'documents_out', timeout: int = 30, skip_existing: bool = True, log_downloads: bool = False, max_workers: int = 4, retries: Optional[Retry] = None, save_mode: str = 'auto', force_extension: Optional[str] = None, basic_auth: Optional[Tuple[str, str]] = None, *, require_pdf: bool = False, allow_redirects: bool = True, write_completion_record: bool = True, flat_output: bool = False, expected_content_types: Optional[Sequence[str]] = None, max_download_bytes: Optional[int] = None)
 ```
 
 ### Parameters
@@ -2952,6 +2955,7 @@ DocumentDownloader(self, auth: Optional[Union[Auth, requests.Session]] = None, b
 | `write_completion_record` | no | `bool` | `True` | Write a hidden JSON record for verified restarts. If False, newly saved files cannot be skipped on subsequent runs without an existing valid record. |
 | `flat_output` | no | `bool` | `False` | Save documents directly in output_dir using custom IDs or default URL hashes. Results contain absolute paths. Explicit output_path takes precedence. |
 | `expected_content_types` | no | `Optional[Sequence[str]]` | `None` | Optional exact MIME types permitted for downloads, e.g. ["text/plain"]. |
+| `max_download_bytes` | no | `Optional[int]` | `None` | Optional positive limit on decoded response bytes per document. |
 
 ### Returns
 
@@ -3278,6 +3282,76 @@ LLMAgent.chat(self, user_prompt: str, *, image_path: Optional[str] = None, file_
 
 **See also:** [Core, Publication, And Utility module guide](../modules/core.md).
 
+#### `fyron.llm.agent.LLMAgent.run_prompts_on_dataframe`
+
+Apply selected templates independently to documents or groups.
+
+**Import path:** `fyron.llm.agent.LLMAgent.run_prompts_on_dataframe`
+
+```python
+LLMAgent.run_prompts_on_dataframe(self, df, *, text_col = None, url_col = None, document_id_col = None, prompts, prompt_names = None, document_auth = None, document_origin = None, max_download_bytes = 5000000, max_extracted_chars = 100000, category_col = None, group_cols = None, order_by = None, context_cols = None, keep_cols = None, max_input_chars = 100000, max_workers = 1)
+```
+
+#### Parameters
+
+| Parameter | Required | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `df` | yes |  |  | Input document table. |
+| `text_col` | no |  | `None` | Column containing document text, as an alternative to url_col. |
+| `url_col` | no |  | `None` | Column of absolute document URLs serving plain text or text-bearing PDFs. |
+| `document_id_col` | no |  | `None` | Unique nonmissing identifier. In URL mode the URL is the default local identifier. |
+| `prompts` | yes |  |  | JSON path, prompts mapping or list of template definitions. |
+| `prompt_names` | no |  | `None` | Optional ordered selection of templates. |
+| `document_auth` | no |  | `None` | Optional document-service Auth or requests.Session, independent of model credentials. |
+| `document_origin` | no |  | `None` | Allowed document origin, required with authentication (HTTPS). |
+| `max_download_bytes` | no |  | `5000000` | Maximum decoded bytes fetched per URL. |
+| `max_extracted_chars` | no |  | `100000` | Maximum extracted characters per URL before prompt assembly. |
+| `category_col` | no |  | `None` | Column used to filter documents for category-specific templates. |
+| `group_cols` | no |  | `None` | Optional grouping columns. Omit for independent documents. |
+| `order_by` | no |  | `None` | Optional column for stable ascending source order. |
+| `context_cols` | no |  | `None` | Columns explicitly sent as context alongside each text. |
+| `keep_cols` | no |  | `None` | Metadata retained locally, as ordered lists for grouped results. |
+| `max_input_chars` | no |  | `100000` | Maximum characters per rendered request, including the instruction. |
+| `max_workers` | no |  | `1` | Maximum concurrent requests using independent HTTP sessions. One runs sequentially. |
+
+#### Returns
+
+`pandas.DataFrame` - One row per applicable prompt and document or group with answer, status and sources.
+
+**See also:** [Core, Publication, And Utility module guide](../modules/core.md).
+
+#### `fyron.llm.agent.LLMAgent.summarize_dataframe`
+
+Summarize selected prior answers and retain their source mappings.
+
+**Import path:** `fyron.llm.agent.LLMAgent.summarize_dataframe`
+
+```python
+LLMAgent.summarize_dataframe(self, answers, *, group_cols, prompts, prompt_names = None, source_prompt_names = None, category_col = None, order_by = None, context_cols = None, allow_partial = False, max_input_chars = 100000, max_workers = 1)
+```
+
+#### Parameters
+
+| Parameter | Required | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `answers` | yes |  |  | Reviewed workflow result table with original status and sources. |
+| `group_cols` | yes |  |  | Nonmissing columns defining each independent summary group. |
+| `prompts` | yes |  |  | Summary template pack or JSON path. |
+| `prompt_names` | no |  | `None` | Optional selection of summary templates. |
+| `source_prompt_names` | no |  | `None` | Optional list of extraction prompts whose answers contribute. |
+| `category_col` | no |  | `None` | Optional category column for summary template filters. |
+| `order_by` | no |  | `None` | Optional column for stable ascending evidence order. |
+| `context_cols` | no |  | `None` | Optional columns explicitly sent alongside answers. |
+| `allow_partial` | no |  | `False` | Allow a marked partial summary from usable answers after input failures. |
+| `max_input_chars` | no |  | `100000` | Maximum characters per rendered request. |
+| `max_workers` | no |  | `1` | Maximum concurrent requests using independent HTTP sessions. One runs sequentially. |
+
+#### Returns
+
+`pandas.DataFrame` - Summary answers and status with nested source mappings.
+
+**See also:** [Core, Publication, And Utility module guide](../modules/core.md).
+
 #### `fyron.llm.agent.LLMAgent.run_on_dataframe`
 
 Run a prompt over a DataFrame column and append results.
@@ -3538,6 +3612,28 @@ No parameters documented.
 ### Returns
 
 Class constructor.
+
+**See also:** [Core, Publication, And Utility module guide](../modules/core.md).
+
+## `fyron.llm.workflows.load_prompt_templates`
+
+Load and validate reusable named text prompts.
+
+**Import path:** `fyron.llm.workflows.load_prompt_templates`
+
+```python
+load_prompt_templates(source)
+```
+
+### Parameters
+
+| Parameter | Required | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `source` | yes |  |  | UTF-8 JSON path, list of definitions, or mapping containing a prompts list. Each definition has a unique name, instruction (prompt), and optional categories. |
+
+### Returns
+
+`list` - Validated definitions in input order, ready for DataFrame workflows.
 
 **See also:** [Core, Publication, And Utility module guide](../modules/core.md).
 
